@@ -37,7 +37,7 @@ export function TablePreview({ tables }: TablePreviewProps) {
           <Badge variant="secondary">{tables.length}개 테이블</Badge>
         </div>
 
-        <Accordion type="single" collapsible className="w-full">
+        <Accordion type="single" collapsible className="w-full max-h-[500px] overflow-y-auto">
           {tables.map((table, index) => (
             <AccordionItem key={index} value={`table-${index}`}>
               <AccordionTrigger className="hover:no-underline">
@@ -88,6 +88,11 @@ export function TablePreview({ tables }: TablePreviewProps) {
                             {column.key && (
                               <Badge variant="default" className="text-xs">
                                 {column.key}
+                              </Badge>
+                            )}
+                            {column.isForeignKey && (
+                              <Badge variant="secondary" className="text-xs ml-1">
+                                FK
                               </Badge>
                             )}
                           </TableCell>

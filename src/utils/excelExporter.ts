@@ -1,5 +1,13 @@
 import * as XLSX from 'xlsx';
-import { Table } from './ddlParser';
+import { Table, Column } from './ddlParser';
+
+// 키 타입 계산 (PK, FK 등 조합)
+function getKeyType(column: Column): string {
+  const keys: string[] = [];
+  if (column.key) keys.push(column.key);
+  if (column.isForeignKey) keys.push('FK');
+  return keys.join(', ');
+}
 
 export function exportToExcel(tables: Table[], filename: string = 'table_definition.xlsx') {
   const workbook = XLSX.utils.book_new();
@@ -18,7 +26,7 @@ export function exportToExcel(tables: Table[], filename: string = 'table_definit
         column.name,
         column.dataType,
         column.nullable ? 'Y' : 'N',
-        column.key,
+        getKeyType(column),
         column.defaultValue,
         column.comment
       ]);
@@ -51,7 +59,7 @@ export function exportToExcel(tables: Table[], filename: string = 'table_definit
         column.name,
         column.dataType,
         column.nullable ? 'Y' : 'N',
-        column.key,
+        getKeyType(column),
         column.defaultValue,
         column.comment
       ]);

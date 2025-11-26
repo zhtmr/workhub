@@ -9,7 +9,7 @@ export interface Column {
   isForeignKey: boolean;
   references?: {
     table: string;
-    column: string;
+    columns: string[];  // 복합키 FK 지원
   };
 }
 
@@ -19,10 +19,10 @@ export interface Table {
   columns: Column[];
   primaryKeys: string[];
   foreignKeys: {
-    column: string;
+    columns: string[];  // 복합키 FK 지원
     references: {
       table: string;
-      column: string;
+      columns: string[];  // 복합키 FK 지원
     };
   }[];
 }
@@ -277,45 +277,49 @@ function splitColumnDefinitions(text: string): string[] {
 }
 
 function parseColumns(
-  columnsText: string, 
-  dbType: DatabaseType, 
-  debug: boolean = false, 
-  errors: ParseError[] = [], 
-  tableName: string = '', 
+  columnsText: string,
+  dbType: DatabaseType,
+  debug: boolean = false,
+  errors: ParseError[] = [],
+  tableName: string = '',
   startLine: number = 0
 ) {
   const columns: Column[] = [];
   const primaryKeys: string[] = [];
   const foreignKeys: {
-    column: string;
+    columns: string[];
     references: {
       table: string;
-      column: string;
+      columns: string[];
     };
   }[] = [];
-  
+
   // 제약조건을 먼저 파싱
   const primaryKeyMatch = columnsText.match(/PRIMARY\s+KEY\s*\(([^)]+)\)/i);
   if (primaryKeyMatch) {
-    const pkColumns = primaryKeyMatch[1].split(',').map(col => 
+    const pkColumns = primaryKeyMatch[1].split(',').map(col =>
       col.trim().replace(/[`"]/g, '')
     );
     primaryKeys.push(...pkColumns);
   }
-  
-  // FOREIGN KEY 파싱
-  const foreignKeyRegex = /FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+(?:(\w+)\.)?(\w+)\s*\(([^)]+)\)/gi;
+
+  // FOREIGN KEY 파싱 (복합키 지원, 참조 컬럼 생략 지원)
+  const foreignKeyRegex = /FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+(?:(\w+)\.)?(\w+)(?:\s*\(([^)]+)\))?/gi;
   let fkMatch;
   while ((fkMatch = foreignKeyRegex.exec(columnsText)) !== null) {
-    const column = fkMatch[1].trim().replace(/[`"]/g, '');
+    // 복합키 분리
+    const fkColumns = fkMatch[1].split(',').map(c => c.trim().replace(/[`"]/g, ''));
     const refTable = fkMatch[3] || fkMatch[2]; // 스키마 없으면 fkMatch[2]가 테이블명
-    const refColumn = fkMatch[4].trim().replace(/[`"]/g, '');
-    
+    // 참조 컬럼이 없으면 빈 배열 (PK 자동 참조)
+    const refColumns = fkMatch[4]
+      ? fkMatch[4].split(',').map(c => c.trim().replace(/[`"]/g, ''))
+      : [];
+
     foreignKeys.push({
-      column,
+      columns: fkColumns,
       references: {
         table: refTable,
-        column: refColumn
+        columns: refColumns
       }
     });
   }
@@ -332,11 +336,9 @@ function parseColumns(
       if (trimmedDef.match(/^(PRIMARY\s+KEY|FOREIGN\s+KEY|INDEX|KEY|UNIQUE\s+KEY|CHECK)\s*\(/)) {
         continue;
       }
-      
-      // CONSTRAINT만 있는 줄도 스킵 (컬럼 정의가 아닌 경우)
-      if (trimmedDef.startsWith('CONSTRAINT') && 
-          !trimmedDef.includes('PRIMARY KEY') &&
-          !columnDef.trim().match(/^\w+\s+\w+/)) {
+
+      // CONSTRAINT로 시작하는 라인은 스킵 (제약조건 정의)
+      if (trimmedDef.startsWith('CONSTRAINT')) {
         continue;
       }
     
@@ -414,24 +416,27 @@ function parseColumns(
       key = 'UQ';
     }
     
-    // 외래키 확인
-    const isForeignKey = foreignKeys.some(fk => fk.column === columnName);
-    const fkInfo = foreignKeys.find(fk => fk.column === columnName);
-    
-    // 인라인 REFERENCES 파싱 (PostgreSQL 스타일)
-    const inlineRefMatch = fullDef.match(/REFERENCES\s+(?:(\w+)\.)?(\w+)\s*\(([^)]+)\)/i);
+    // 외래키 확인 (복합키의 경우 columns 배열에 포함되어 있는지 확인)
+    const isForeignKey = foreignKeys.some(fk => fk.columns.includes(columnName));
+    const fkInfo = foreignKeys.find(fk => fk.columns.includes(columnName));
+
+    // 인라인 REFERENCES 파싱 (PostgreSQL 스타일, CONSTRAINT 이름 지원, 참조 컬럼 생략 지원)
+    const inlineRefMatch = fullDef.match(/(?:CONSTRAINT\s+\w+\s+)?REFERENCES\s+(?:(\w+)\.)?(\w+)(?:\s*\(([^)]+)\))?/i);
     let references = fkInfo?.references;
-    
+
     if (inlineRefMatch) {
       const refTable = inlineRefMatch[2] || inlineRefMatch[1];
-      const refColumn = inlineRefMatch[3].trim().replace(/[`"]/g, '');
+      // 참조 컬럼이 없으면 빈 배열 (PK 자동 참조)
+      const refColumns = inlineRefMatch[3]
+        ? inlineRefMatch[3].split(',').map(c => c.trim().replace(/[`"]/g, ''))
+        : [];
       references = {
         table: refTable,
-        column: refColumn
+        columns: refColumns
       };
       if (!isForeignKey) {
         foreignKeys.push({
-          column: columnName,
+          columns: [columnName],
           references
         });
       }
@@ -529,34 +534,40 @@ function parseColumns(
 }
 
 function parseAlterTableForeignKeys(ddlText: string, tables: Table[], dbType: DatabaseType) {
-  // ALTER TABLE ... ADD FOREIGN KEY 파싱 (스키마명 처리)
-  const alterFKRegex = /ALTER\s+TABLE\s+(?:(\w+)\.)?(\w+)\s+ADD\s+(?:CONSTRAINT\s+\w+\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+(?:(\w+)\.)?(\w+)\s*\(([^)]+)\)/gi;
-  
+  // ALTER TABLE ... ADD FOREIGN KEY 파싱 (스키마명 처리, 복합키 지원, 참조 컬럼 생략 지원)
+  const alterFKRegex = /ALTER\s+TABLE\s+(?:(\w+)\.)?(\w+)\s+ADD\s+(?:CONSTRAINT\s+\w+\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+(?:(\w+)\.)?(\w+)(?:\s*\(([^)]+)\))?/gi;
+
   let match;
   while ((match = alterFKRegex.exec(ddlText)) !== null) {
     const tableName = match[2]; // 스키마명 제외한 테이블명
-    const column = match[3].trim().replace(/[`"]/g, '');
+    // 복합키 분리
+    const fkColumns = match[3].split(',').map(c => c.trim().replace(/[`"]/g, ''));
     const refTable = match[5]; // 참조 테이블명 (스키마명 제외)
-    const refColumn = match[6].trim().replace(/[`"]/g, '');
-    
+    // 참조 컬럼이 없으면 빈 배열 (PK 자동 참조)
+    const refColumns = match[6]
+      ? match[6].split(',').map(c => c.trim().replace(/[`"]/g, ''))
+      : [];
+
     const table = tables.find(t => t.name === tableName);
     if (table) {
       table.foreignKeys.push({
-        column,
+        columns: fkColumns,
         references: {
           table: refTable,
-          column: refColumn
+          columns: refColumns
         }
       });
-      
-      // 컬럼 정보 업데이트
-      const col = table.columns.find(c => c.name === column);
-      if (col) {
-        col.isForeignKey = true;
-        col.references = {
-          table: refTable,
-          column: refColumn
-        };
+
+      // 복합키의 각 컬럼에 isForeignKey 플래그 설정
+      for (const colName of fkColumns) {
+        const col = table.columns.find(c => c.name === colName);
+        if (col) {
+          col.isForeignKey = true;
+          col.references = {
+            table: refTable,
+            columns: refColumns
+          };
+        }
       }
     }
   }

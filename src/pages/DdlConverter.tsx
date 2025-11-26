@@ -9,53 +9,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { parseDDL, Table, DatabaseType, ParseResult } from "@/utils/ddlParser";
-import { formatAndSortDDL, cleanupDDLText } from "@/utils/ddlFormatter";
 import { exportToExcel } from "@/utils/excelExporter";
-import { FileSpreadsheet, Wand2, Database, Network, ArrowDownUp, Bug } from "lucide-react";
+import { FileSpreadsheet, Wand2, Database, Network, Bug } from "lucide-react";
 import { toast } from "sonner";
 
 const DdlConverter = () => {
   const [ddlText, setDdlText] = useState("");
   const [parsedTables, setParsedTables] = useState<Table[]>([]);
   const [dbType, setDbType] = useState<DatabaseType>('auto');
-  const [autoSort, setAutoSort] = useState(true);
-  const [isFormatted, setIsFormatted] = useState(false);
   const [debugMode, setDebugMode] = useState(false);
   const [parseStats, setParseStats] = useState<ParseStats | null>(null);
 
   const handleDDLChange = (newDdl: string) => {
     setDdlText(newDdl);
-    setIsFormatted(false);
-  };
-
-  const handleAutoFormat = () => {
-    if (!ddlText.trim()) {
-      toast.error("DDL을 입력해주세요.");
-      return;
-    }
-
-    try {
-      // 먼저 파싱
-      const tables = parseDDL(ddlText, dbType);
-      if (tables.length === 0) {
-        toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
-        return;
-      }
-
-      // 정렬 및 포맷팅
-      const detectedDbType = dbType === 'auto' ? 'postgresql' : dbType;
-      const formatted = formatAndSortDDL(tables, detectedDbType);
-      const cleaned = cleanupDDLText(formatted);
-      
-      setDdlText(cleaned);
-      setIsFormatted(true);
-      toast.success("DDL이 정렬 및 포맷팅되었습니다.", {
-        description: `${tables.length}개 테이블이 의존성 순서로 정렬되었습니다.`
-      });
-    } catch (error) {
-      console.error("Formatting error:", error);
-      toast.error("DDL 포맷팅 중 오류가 발생했습니다.");
-    }
   };
 
   const handleParse = () => {
@@ -65,24 +31,9 @@ const DdlConverter = () => {
     }
 
     try {
-      // autoSort가 켜져 있고 아직 포맷팅 안 됐으면 먼저 포맷팅
-      let textToParse = ddlText;
-      
-      if (autoSort && !isFormatted) {
-        const tables = parseDDL(ddlText, dbType);
-        if (Array.isArray(tables) && tables.length > 0) {
-          const detectedDbType = dbType === 'auto' ? 'postgresql' : dbType;
-          const formatted = formatAndSortDDL(tables, detectedDbType);
-          textToParse = cleanupDDLText(formatted);
-          setDdlText(textToParse);
-          setIsFormatted(true);
-          toast.info("DDL을 자동으로 정렬했습니다.");
-        }
-      }
-
-      const result = debugMode 
-        ? parseDDL(textToParse, dbType, true)
-        : parseDDL(textToParse, dbType);
+      const result = debugMode
+        ? parseDDL(ddlText, dbType, true)
+        : parseDDL(ddlText, dbType);
       
       if (debugMode && !Array.isArray(result)) {
         // 디버그 모드인 경우
@@ -193,7 +144,6 @@ CREATE TABLE comments (
   const loadSample = (type: 'mysql' | 'postgresql' = 'mysql') => {
     setDdlText(type === 'mysql' ? sampleDDL : samplePostgreSQL);
     setDbType(type);
-    setIsFormatted(false);
     toast.info(`${type.toUpperCase()} 샘플 DDL을 불러왔습니다.`);
   };
 
@@ -237,48 +187,26 @@ CREATE TABLE comments (
               </div>
 
               <div className="space-y-2">
-                <Label>자동 정렬</Label>
+                <Label>디버그 모드</Label>
                 <div className="flex items-center h-10 px-3 border rounded-md bg-background">
-                  <Switch 
-                    checked={autoSort} 
-                    onCheckedChange={setAutoSort}
+                  <Switch
+                    checked={debugMode}
+                    onCheckedChange={setDebugMode}
                     className="mr-2"
                   />
-                  <span className="text-sm">{autoSort ? '활성화' : '비활성화'}</span>
+                  <span className="text-sm">{debugMode ? '활성화' : '비활성화'}</span>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>디버그 모드</Label>
-              <div className="flex items-center h-10 px-3 border rounded-md bg-background">
-                <Switch 
-                  checked={debugMode} 
-                  onCheckedChange={setDebugMode}
-                  className="mr-2"
-                />
-                <span className="text-sm">{debugMode ? '활성화' : '비활성화'}</span>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleAutoFormat} 
-                variant="outline"
-                className="flex-1"
-              >
-                <ArrowDownUp className="w-4 h-4 mr-2" />
-                DDL 정렬
-              </Button>
-              <Button 
-                onClick={handleParse} 
-                className="flex-1"
-                size="lg"
-              >
-                <Wand2 className="w-4 h-4 mr-2" />
-                변환
-              </Button>
-            </div>
+            <Button
+              onClick={handleParse}
+              className="w-full"
+              size="lg"
+            >
+              <Wand2 className="w-4 h-4 mr-2" />
+              변환
+            </Button>
 
             <Select onValueChange={(value) => loadSample(value as 'mysql' | 'postgresql')}>
               <SelectTrigger>

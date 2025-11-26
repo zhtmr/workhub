@@ -13,8 +13,8 @@ export function Header() {
             <Briefcase className="w-4 h-4 text-primary" />
           </div>
           <div className="flex flex-col">
-            <h1 className="text-sm font-semibold text-foreground">업무 지원 도구</h1>
-            <p className="text-xs text-muted-foreground">통합 업무 관리 시스템</p>
+            <h1 className="text-sm font-semibold text-foreground">WorkHub</h1>
+            <p className="text-xs text-muted-foreground">통합 업무 시스템</p>
           </div>
         </div>
       </div>

@@ -1,0 +1,1549 @@
+create table public.crops
+(
+    crops_id         varchar default ('CROP'::text ||
+                                      lpad((nextval('seq_crop_id'::regclass))::text, 6, '0'::text)) not null
+        constraint pk_crop_t
+            primary key,
+    crops_name       varchar                                                                        not null
+        constraint crops_pk
+            unique,
+    crops_sequence   integer                                                                        not null,
+    crops_department varchar
+);
+
+comment on table public.crops is '작목 테이블';
+
+comment on column public.crops.crops_id is '작목 아이디';
+
+comment on column public.crops.crops_name is '작목 이름. 작목';
+
+comment on column public.crops.crops_sequence is '작목 순서. 작목';
+
+comment on column public.crops.crops_department is '소속';
+
+alter table public.crops
+    owner to postgres;
+
+create table public.institution
+(
+    institution_id   varchar default ('INST'::text ||
+                                      lpad((nextval('seq_institution_id'::regclass))::text, 6, '0'::text)) not null
+        constraint pk_institution_t
+            primary key,
+    institution_name varchar                                                                               not null,
+    depth            integer                                                                               not null,
+    parents_id       varchar
+);
+
+comment on table public.institution is '기관테이블';
+
+comment on column public.institution.institution_id is '기관 아이디';
+
+comment on column public.institution.depth is '깊이. 깊이';
+
+comment on column public.institution.parents_id is '상위기관 아이디. 상위기관';
+
+alter table public.institution
+    owner to postgres;
+
+create table public.item_resource
+(
+    item_resource_id   varchar   default ('RESRC'::text ||
+                                          lpad((nextval('seq_resource_id'::regclass))::text, 5, '0'::text)) not null
+        constraint pk_item_resource_t
+            primary key,
+    crops_id           varchar                                                                              not null
+        constraint fk_item_resource_crop
+            references public.crops
+            on update restrict on delete restrict,
+    alternative_active boolean                                                                              not null,
+    item_type          varchar                                                                              not null,
+    item_name          varchar                                                                              not null,
+    comment            varchar                                                                              not null,
+    remark             varchar                                                                              not null,
+    creation_user      varchar                                                                              not null,
+    creation_date      timestamp default now()                                                              not null,
+    link_key           boolean   default false                                                              not null
+);
+
+comment on table public.item_resource is '자원항목 관리 테이블';
+
+comment on column public.item_resource.item_resource_id is '자원항목 아이디';
+
+comment on column public.item_resource.crops_id is '작목 아이디. 작목';
+
+comment on column public.item_resource.alternative_active is '활성화 여부. 활성화';
+
+comment on column public.item_resource.item_type is '항목유형. 항목유형';
+
+comment on column public.item_resource.item_name is '항목명. 항목명';
+
+comment on column public.item_resource.comment is '상세내용. 상세내용';
+
+comment on column public.item_resource.remark is '비고. 비고';
+
+alter table public.item_resource
+    owner to postgres;
+
+create table public.log
+(
+    log_id             varchar default ('LOG'::text ||
+                                        lpad((nextval('seq_log_id'::regclass))::text, 6, '0'::text)) not null
+        constraint pk_log_t
+            primary key,
+    menu               varchar                                                                       not null,
+    submenu            varchar,
+    type               varchar                                                                       not null,
+    target_id          varchar,
+    data_before_update jsonb,
+    data_after_update  jsonb,
+    creation_user      varchar                                                                       not null,
+    creation_date      timestamp                                                                     not null
+);
+
+comment on table public.log is '로그 테이블';
+
+comment on column public.log.log_id is '로그 아이디';
+
+comment on column public.log.menu is '실행 메뉴. 실행';
+
+comment on column public.log.submenu is '실행 서브메뉴. 실행';
+
+comment on column public.log.type is '실행 카테고리. 실행';
+
+comment on column public.log.target_id is '실행 시 부여된 아이디. 실행';
+
+comment on column public.log.data_before_update is '수정 이전 데이터. 수정';
+
+comment on column public.log.data_after_update is '수정 이후 데이터. 수정';
+
+comment on column public.log.creation_user is '등록 시점. 등록';
+
+comment on column public.log.creation_date is '등록 사용자. 등록';
+
+alter table public.log
+    owner to postgres;
+
+create table public.breeding_resource_sample
+(
+    breeding_resource_id        varchar   default ('BREED'::text ||
+                                                   lpad((nextval('seq_breeding_id'::regclass))::text, 5, '0'::text)) not null
+        primary key,
+    project_id                  character varying[]                                                                  not null,
+    crops_id                    varchar,
+    detail_data                 jsonb     default '{}'::jsonb                                                        not null,
+    alternative_inclusion_photo boolean   default false                                                              not null,
+    alternative_delete          boolean   default false                                                              not null,
+    creation_date               timestamp default now()
+);
+
+comment on table public.breeding_resource_sample is '육종자원 상세 테이블';
+
+comment on column public.breeding_resource_sample.breeding_resource_id is '육종자원 아이디. 육종자원';
+
+comment on column public.breeding_resource_sample.project_id is '과제 아이디';
+
+comment on column public.breeding_resource_sample.detail_data is '상세 데이터. 상세';
+
+alter table public.breeding_resource_sample
+    owner to postgres;
+
+create table public.field_examination_image
+(
+    project_id                       varchar                 not null,
+    field_examination_id             varchar                 not null,
+    field_examination_sequence       integer                 not null,
+    field_examination_image_sequence integer                 not null,
+    breeding_resource_id             varchar                 not null,
+    file_name                        varchar                 not null,
+    extension                        varchar                 not null,
+    file_path                        varchar                 not null,
+    remark                           varchar                 not null,
+    photograph_gps                   varchar,
+    photography_date                 varchar,
+    creation_date                    timestamp default now() not null,
+    creation_user                    varchar,
+    constraint pk_project_filed_image_t
+        primary key (project_id, field_examination_id, field_examination_sequence, field_examination_image_sequence)
+);
+
+alter table public.field_examination_image
+    owner to postgres;
+
+create table public.project_external_link
+(
+    rsrchtasksn       integer                   not null
+        constraint pk_project_platform_t
+            primary key,
+    rsrchtasknm       varchar                   not null,
+    rsrchtaskno       varchar                   not null,
+    rsrchbgngymd      varchar                   not null,
+    rsrchendymd       varchar                   not null,
+    rspnsblrsrchrid   varchar                   not null,
+    frstrgtrid        varchar                   not null,
+    frstrgtrnm        varchar                   not null,
+    frstregdt         varchar                   not null,
+    lastmdfrid        varchar                   not null,
+    lastmdfrnm        varchar                   not null,
+    lastmdfcndt       varchar                   not null,
+    rsrchtaskcn       varchar                   not null,
+    rlsyn             varchar                   not null,
+    opnyn             varchar                   not null,
+    rsrchdeptcd       varchar                   not null,
+    rsrchdeptnm       varchar                   not null,
+    rsrchdeptfullnm   varchar                   not null,
+    crtryr            varchar                   not null,
+    excyr             varchar                   not null,
+    tasktypecd        varchar                   not null,
+    tasktypenm        varchar                   not null,
+    taskclcd          varchar                   not null,
+    taskclnm          varchar                   not null,
+    rsrchskllcd       varchar                   not null,
+    rsrchskllnm       varchar                   not null,
+    rsrchsttscd       varchar                   not null,
+    rsrchsttsnm       varchar                   not null,
+    rspnsblrsrchrinfo jsonb default '{}'::jsonb not null,
+    rsrchprdlstlist   jsonb default '{}'::jsonb not null,
+    datarbprsnlist    jsonb default '{}'::jsonb not null,
+    copertnrsrchrlist jsonb default '{}'::jsonb not null,
+    rsrchsptlist      jsonb default '{}'::jsonb not null
+);
+
+comment on table public.project_external_link is '다잇다 플랫폼 연계 과제 테이블';
+
+comment on column public.project_external_link.rsrchtasksn is '플랫폼 과제 일련번호';
+
+comment on column public.project_external_link.rsrchtasknm is '과제명. 과제명';
+
+comment on column public.project_external_link.rsrchtaskno is '과제 번호';
+
+comment on column public.project_external_link.rsrchbgngymd is '시작일자. 시작일자';
+
+comment on column public.project_external_link.rsrchendymd is '종료일자. 종료일자';
+
+comment on column public.project_external_link.rspnsblrsrchrid is '책임자 아이디. 책임자';
+
+comment on column public.project_external_link.frstrgtrid is '최초 등록자 아이디. 최초';
+
+comment on column public.project_external_link.frstrgtrnm is '최초 등록자 성명. 최초';
+
+comment on column public.project_external_link.frstregdt is '최초 등록일자. 최초';
+
+comment on column public.project_external_link.lastmdfrid is '최종 수정자 아이디. 최종';
+
+comment on column public.project_external_link.lastmdfrnm is '최종 수정자 성명. 최종';
+
+comment on column public.project_external_link.lastmdfcndt is '최종 수정일자. 최종';
+
+comment on column public.project_external_link.rsrchtaskcn is '과제 내용. 과제';
+
+comment on column public.project_external_link.rlsyn is '목록 공개 여부. 목록';
+
+comment on column public.project_external_link.opnyn is '개방 여부. 개방';
+
+comment on column public.project_external_link.rsrchdeptcd is '부서 코드. 부서';
+
+comment on column public.project_external_link.rsrchdeptnm is '부서명. 부서명';
+
+comment on column public.project_external_link.rsrchdeptfullnm is '전체 부서명. 전체';
+
+comment on column public.project_external_link.crtryr is '기준연도. 기준연도';
+
+comment on column public.project_external_link.excyr is '수행연도. 수행연도';
+
+comment on column public.project_external_link.tasktypecd is '과제 유형 코드. 과제';
+
+comment on column public.project_external_link.tasktypenm is '과제 유형. 과제';
+
+comment on column public.project_external_link.taskclcd is '과제 분류 코드. 과제';
+
+comment on column public.project_external_link.taskclnm is '과제 분류. 과제';
+
+comment on column public.project_external_link.rsrchskllcd is '기능 코드. 기능';
+
+comment on column public.project_external_link.rsrchskllnm is '기능. 기능';
+
+comment on column public.project_external_link.rsrchsttscd is '과제 상태 코드. 과제';
+
+comment on column public.project_external_link.rsrchsttsnm is '과제 상태. 과제';
+
+comment on column public.project_external_link.rspnsblrsrchrinfo is '책임자 정보. 책임자';
+
+comment on column public.project_external_link.rsrchprdlstlist is '품목 목록. 품목';
+
+comment on column public.project_external_link.datarbprsnlist is '데이터 책임자 목록. 데이터';
+
+comment on column public.project_external_link.copertnrsrchrlist is '공동 참여자 목록. 공동';
+
+comment on column public.project_external_link.rsrchsptlist is '현장 목록. 현장';
+
+alter table public.project_external_link
+    owner to postgres;
+
+create unique index uq_project_platform_t_1
+    on public.project_external_link (rsrchtaskno);
+
+create table public.project
+(
+    project_id                varchar   default ('PROJ'::text ||
+                                                 lpad((nextval('seq_project_id'::regclass))::text, 6, '0'::text)) not null
+        constraint pk_project_t
+            primary key,
+    crops_id                  varchar                                                                             not null
+        constraint fk_project_crop
+            references public.crops
+            on update restrict on delete restrict,
+    rsrchtaskno               varchar
+        constraint project_t_unique
+            unique,
+    alternative_delete        boolean                                                                             not null,
+    project_name              varchar                                                                             not null,
+    creation_user             varchar                                                                             not null,
+    creation_date             timestamp default now()                                                             not null,
+    excyr                     varchar,
+    institution               varchar,
+    tasktypenm                varchar,
+    rspnsblrsrchrnm           varchar,
+    platform_link_task_number varchar,
+    task_period               varchar,
+    task_description          varchar
+);
+
+comment on table public.project is '과제 테이블';
+
+comment on column public.project.project_id is '과제 번호';
+
+comment on column public.project.crops_id is '작목 아이디. 작목';
+
+comment on column public.project.rsrchtaskno is '과제 번호. 플랫폼';
+
+comment on column public.project.alternative_delete is '삭제 여부. 삭제';
+
+comment on column public.project.project_name is '과제명. 과제명';
+
+comment on column public.project.creation_user is '등록 사용자. 등록';
+
+comment on column public.project.creation_date is '등록 시점. 등록';
+
+comment on column public.project.excyr is '시작연도';
+
+comment on column public.project.institution is '수행기관';
+
+comment on column public.project.tasktypenm is '과제유형(분류)';
+
+comment on column public.project.rspnsblrsrchrnm is '책임자';
+
+comment on column public.project.platform_link_task_number is '플랫폼연계과제번호';
+
+comment on column public.project.task_period is '과제기간';
+
+comment on column public.project.task_description is '과제설명';
+
+alter table public.project
+    owner to postgres;
+
+create table public.field_examination_list
+(
+    field_examination_id     varchar   default ('FIELD'::text ||
+                                                lpad((nextval('seq_field_id'::regclass))::text, 5, '0'::text)) not null,
+    project_id               varchar                                                                           not null
+        constraint fk_field_list_project
+            references public.project
+            on update restrict on delete restrict,
+    form_data                jsonb     default '{}'::jsonb                                                     not null,
+    field_examination_column jsonb     default '{}'::jsonb                                                     not null,
+    creation_user            varchar                                                                           not null,
+    creation_date            timestamp default now(),
+    alternative_repetition   boolean   default true                                                            not null,
+    repetition               integer   default 1                                                               not null,
+    constraint pk_project_field_list_t
+        primary key (field_examination_id, project_id)
+);
+
+comment on table public.field_examination_list is '시험정보 목록 테이블';
+
+comment on column public.field_examination_list.field_examination_id is '시험정보 아이디. 시험정보';
+
+comment on column public.field_examination_list.project_id is '과제 아이디';
+
+comment on column public.field_examination_list.form_data is '시험정보 양식 데이터. 시험정보';
+
+comment on column public.field_examination_list.field_examination_column is '시험정보 컬럼. 시험정보';
+
+comment on column public.field_examination_list.creation_user is '등록 시점. 등록';
+
+alter table public.field_examination_list
+    owner to postgres;
+
+create table public.field_examination_sample
+(
+    project_id                  varchar                     not null,
+    field_examination_id        varchar                     not null,
+    field_examination_sequence  integer                     not null,
+    alternative_inclusion_photo boolean default false       not null,
+    detail_data                 jsonb   default '{}'::jsonb not null,
+    breeding_resource_id        varchar                     not null,
+    repetition                  varchar,
+    alternative_delete          boolean default false       not null,
+    constraint pk_project_field_view_t
+        primary key (project_id, field_examination_id, field_examination_sequence),
+    constraint fk_field_view_list
+        foreign key (field_examination_id, project_id) references public.field_examination_list
+            on update restrict on delete restrict
+);
+
+comment on table public.field_examination_sample is '시험정보 상세 테이블';
+
+comment on column public.field_examination_sample.project_id is '과제 아이디';
+
+comment on column public.field_examination_sample.field_examination_id is '시험정보 아이디. 시험정보';
+
+comment on column public.field_examination_sample.field_examination_sequence is '시험정보 시퀀스. 시험정보';
+
+comment on column public.field_examination_sample.alternative_inclusion_photo is '사진 보유 여부. 사진';
+
+comment on column public.field_examination_sample.detail_data is '상세 데이터. 상세';
+
+comment on column public.field_examination_sample.breeding_resource_id is '육종자원 아이디';
+
+comment on column public.field_examination_sample.repetition is '반복';
+
+alter table public.field_examination_sample
+    owner to postgres;
+
+create table public.omics_list
+(
+    omics_id             varchar   default ('OMICS'::text ||
+                                            lpad((nextval('seq_omics_id'::regclass))::text, 5, '0'::text)) not null,
+    project_id           varchar                                                                           not null
+        constraint fk_project_omics_project
+            references public.project
+            on update restrict on delete restrict,
+    type                 varchar                                                                           not null,
+    title                varchar                                                                           not null,
+    remark               varchar                                                                           not null,
+    omics_column         jsonb     default '{}'::jsonb                                                     not null,
+    creation_user        varchar                                                                           not null,
+    creation_date        timestamp default now()                                                           not null,
+    file_name            varchar,
+    analysis_status_code varchar,
+    constraint pk_project_omics_t
+        primary key (omics_id, project_id)
+);
+
+comment on table public.omics_list is '오믹스데이터 테이블';
+
+comment on column public.omics_list.omics_id is '오믹스 아이디. 오믹스';
+
+comment on column public.omics_list.project_id is '과제 아이디';
+
+comment on column public.omics_list.type is '데이터 유형. 데이터';
+
+comment on column public.omics_list.title is '제목. 제목';
+
+comment on column public.omics_list.remark is '상세내용. 상세내용';
+
+comment on column public.omics_list.omics_column is '오믹스데이터. 오믹스데이터';
+
+comment on column public.omics_list.file_name is '실제 파일명이 아닌 오믹스데이터 리스트에 출력시키기 위한 파일명';
+
+alter table public.omics_list
+    owner to postgres;
+
+create table public.omics_file
+(
+    omics_id            varchar not null,
+    project_id          varchar not null,
+    omics_file_sequence integer not null,
+    file_name           varchar not null,
+    extension           varchar not null,
+    file_path           varchar not null,
+    constraint project_omics_file_t_pkey
+        primary key (omics_id, project_id, omics_file_sequence),
+    constraint fk_project_omics_file_t_omics_id_project_omics_t_omics_id
+        foreign key (omics_id, project_id) references public.omics_list
+            on update restrict on delete restrict
+);
+
+comment on column public.omics_file.omics_id is '오믹스 아이디';
+
+comment on column public.omics_file.project_id is '과제 아이디';
+
+comment on column public.omics_file.omics_file_sequence is '오믹스 파일 시퀀스';
+
+comment on column public.omics_file.file_name is '파일명';
+
+comment on column public.omics_file.extension is '확장자';
+
+comment on column public.omics_file.file_path is '파일 경로';
+
+alter table public.omics_file
+    owner to postgres;
+
+create table public.omics_sample
+(
+    omics_sequence              integer not null,
+    omics_id                    varchar not null,
+    project_id                  varchar not null,
+    alternative_inclusion_photo boolean not null,
+    detail_data                 jsonb   not null,
+    constraint pk_project_omics_view_t
+        primary key (omics_sequence, omics_id, project_id),
+    constraint fk_omics_view_omics
+        foreign key (omics_id, project_id) references public.omics_list
+            on update restrict on delete restrict
+);
+
+comment on table public.omics_sample is '오믹스데이터 상세 테이블';
+
+comment on column public.omics_sample.omics_sequence is '오믹스 시퀀스. 오믹스';
+
+comment on column public.omics_sample.omics_id is '오믹스 아이디. 오믹스';
+
+comment on column public.omics_sample.project_id is '과제 아이디';
+
+comment on column public.omics_sample.alternative_inclusion_photo is '사진 보유 여부. 사진';
+
+comment on column public.omics_sample.detail_data is '상세 데이터. 상세';
+
+alter table public.omics_sample
+    owner to postgres;
+
+create table public.omics_image
+(
+    omics_image_sequence integer                 not null,
+    project_id           varchar                 not null,
+    omics_id             varchar                 not null,
+    omics_sequence       integer                 not null,
+    file_name            varchar                 not null,
+    extension            varchar                 not null,
+    file_path            varchar                 not null,
+    remark               varchar                 not null,
+    photograph_gps       varchar,
+    photography_date     varchar,
+    creation_date        timestamp default now() not null,
+    constraint pk_project_omics_image_t
+        primary key (omics_image_sequence, project_id, omics_id, omics_sequence),
+    constraint fk_omics_image_view
+        foreign key (omics_sequence, omics_id, project_id) references public.omics_sample
+            on update restrict on delete restrict
+);
+
+comment on table public.omics_image is '오믹스데이터 이미지 테이블';
+
+comment on column public.omics_image.omics_image_sequence is '오믹스 이미지 시퀀스. 오믹스';
+
+comment on column public.omics_image.project_id is '과제 아이디';
+
+comment on column public.omics_image.omics_id is '오믹스 아이디. 오믹스';
+
+comment on column public.omics_image.omics_sequence is '오믹스 시퀀스. 오믹스';
+
+comment on column public.omics_image.file_name is '이미지 파일명. 이미지';
+
+comment on column public.omics_image.extension is '이미지 확장자. 이미지';
+
+comment on column public.omics_image.file_path is '이미지 파일경로. 이미지';
+
+comment on column public.omics_image.remark is '비고. 비고';
+
+alter table public.omics_image
+    owner to postgres;
+
+create table public.reference_genome
+(
+    reference_genome_id varchar default ('REFGEN'::text ||
+                                         lpad((nextval('seq_refgenome_id'::regclass))::text, 4, '0'::text)) not null
+        constraint pk_refgenome_t
+            primary key,
+    title               varchar                                                                             not null,
+    origin              varchar                                                                             not null,
+    crops_id            varchar,
+    total_chromosomes   varchar,
+    total_length        varchar,
+    total_genes         varchar
+);
+
+comment on table public.reference_genome is '참조유전체 테이블';
+
+comment on column public.reference_genome.reference_genome_id is '참조유전체 아이디';
+
+comment on column public.reference_genome.title is '제목. 제목';
+
+comment on column public.reference_genome.origin is '출처. 출처';
+
+alter table public.reference_genome
+    owner to postgres;
+
+create table public.reference_genome_file
+(
+    reference_genome_id        varchar not null
+        constraint fk_refgenome_file
+            references public.reference_genome
+            on update restrict on delete restrict,
+    reference_genome_item_name varchar not null,
+    reference_genome_file_name varchar not null,
+    reference_genome_extension varchar not null,
+    reference_genome_file_path varchar not null,
+    constraint pk_refgenome_file_t
+        primary key (reference_genome_id, reference_genome_item_name)
+);
+
+comment on table public.reference_genome_file is '참조유전체 첨부파일 테이블';
+
+comment on column public.reference_genome_file.reference_genome_id is '참조유전체 아이디';
+
+comment on column public.reference_genome_file.reference_genome_item_name is '참조유전체 항목명. 참조유전체';
+
+comment on column public.reference_genome_file.reference_genome_file_name is '참조유전체 파일명. 참조유전체';
+
+comment on column public.reference_genome_file.reference_genome_extension is '참조유전체 확장자. 참조유전체';
+
+comment on column public.reference_genome_file.reference_genome_file_path is '참조유전체 파일 경로. 참조유전체';
+
+alter table public.reference_genome_file
+    owner to postgres;
+
+create table public.analysis_status
+(
+    analysis_status_code varchar default ('STAT'::text || lpad((nextval('seq_status_analysis_code'::regclass))::text, 6,
+                                                               '0'::text)) not null
+        constraint pk_status_analysis_t
+            primary key,
+    analysis_status_name varchar                                           not null
+);
+
+comment on table public.analysis_status is '분석 상세 테이블';
+
+comment on column public.analysis_status.analysis_status_code is '분석상태 코드';
+
+comment on column public.analysis_status.analysis_status_name is '분석상태 이름. 분석상태';
+
+alter table public.analysis_status
+    owner to postgres;
+
+create table public.analysis_gs_model_training
+(
+    gs_model_id              varchar default ('GSMOD'::text ||
+                                              lpad((nextval('seq_gs_model_id'::regclass))::text, 5, '0'::text)) not null
+        constraint pk_analysis_gs_model_t
+            primary key,
+    project_id               varchar                                                                            not null,
+    crops_id                 varchar                                                                            not null
+        constraint fk_gs_model_crop
+            references public.crops
+            on update restrict on delete restrict,
+    genotype_id              varchar                                                                            not null,
+    trait_id                 varchar                                                                            not null,
+    duplication_data_process varchar                                                                            not null,
+    model                    jsonb                                                                              not null,
+    trait_name_list          jsonb                                                                              not null,
+    analysis_status_code     varchar                                                                            not null
+        constraint fk_gs_model_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    creation_user            varchar                                                                            not null,
+    creation_date            timestamp                                                                          not null,
+    analysis_title           varchar
+);
+
+comment on table public.analysis_gs_model_training is '오믹스데이터 분석 - 예측모델학습 테이블';
+
+comment on column public.analysis_gs_model_training.gs_model_id is '예측모델 아이디';
+
+comment on column public.analysis_gs_model_training.project_id is '과제 아이디';
+
+comment on column public.analysis_gs_model_training.crops_id is '작목 아이디. 작목';
+
+comment on column public.analysis_gs_model_training.genotype_id is '유전형 데이터 아이디. 유전형';
+
+comment on column public.analysis_gs_model_training.trait_id is '형질 데이터 아이디. 형질';
+
+comment on column public.analysis_gs_model_training.duplication_data_process is '중복된 데이터 처리. 중복된';
+
+comment on column public.analysis_gs_model_training.model is '분석 모델. 분석';
+
+comment on column public.analysis_gs_model_training.trait_name_list is '형질명 목록. 형질명';
+
+comment on column public.analysis_gs_model_training.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_gs_model_training.creation_user is '등록 사용자. 등록';
+
+comment on column public.analysis_gs_model_training.creation_date is '등록 시점. 등록';
+
+comment on column public.analysis_gs_model_training.analysis_title is '제목';
+
+alter table public.analysis_gs_model_training
+    owner to postgres;
+
+create table public.analysis_gs_trait_prediction
+(
+    gs_trait_prediction_id varchar default ('GSTRT'::text ||
+                                            lpad((nextval('seq_gs_trait_id'::regclass))::text, 5, '0'::text)) not null,
+    gs_model_id            varchar                                                                            not null,
+    project_id             varchar                                                                            not null,
+    crops_id               varchar                                                                            not null
+        constraint fk_gs_trait_crop
+            references public.crops
+            on update restrict on delete restrict,
+    genotype_id            varchar                                                                            not null,
+    title                  varchar                                                                            not null,
+    gs_model               jsonb                                                                              not null,
+    analysis_status_code   varchar                                                                            not null
+        constraint fk_gs_trait_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    creation_date          timestamp                                                                          not null,
+    creation_user          varchar,
+    constraint pk_analysis_gs_trait_t
+        primary key (gs_trait_prediction_id, gs_model_id)
+);
+
+comment on table public.analysis_gs_trait_prediction is '오믹스데이터 분석 - 형질예측 테이블';
+
+comment on column public.analysis_gs_trait_prediction.gs_trait_prediction_id is '형질예측 아이디';
+
+comment on column public.analysis_gs_trait_prediction.gs_model_id is '예측모델 아이디. 예측모델';
+
+comment on column public.analysis_gs_trait_prediction.project_id is '과제 아이디';
+
+comment on column public.analysis_gs_trait_prediction.crops_id is '작목 아이디. 작목';
+
+comment on column public.analysis_gs_trait_prediction.genotype_id is '유전형 데이터 아이디. 유전형';
+
+comment on column public.analysis_gs_trait_prediction.title is '제목. 제목';
+
+comment on column public.analysis_gs_trait_prediction.gs_model is '예측모델 정보. 예측모델';
+
+comment on column public.analysis_gs_trait_prediction.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_gs_trait_prediction.creation_date is '등록 시점. 등록';
+
+alter table public.analysis_gs_trait_prediction
+    owner to postgres;
+
+create table public.analysis_gwas
+(
+    gwas_id                  varchar   default ('GWAS'::text ||
+                                                lpad((nextval('seq_gwas_id'::regclass))::text, 6, '0'::text)) not null
+        constraint pk_analysis_gwas_t
+            primary key,
+    project_id               varchar                                                                          not null,
+    crops_id                 varchar                                                                          not null
+        constraint analysis_gwas_crops_crops_id_fk
+            references public.crops,
+    genotype_id              varchar                                                                          not null,
+    trait_id                 varchar                                                                          not null,
+    duplication_data_process varchar                                                                          not null,
+    analysis_model           jsonb     default '{}'::jsonb                                                    not null,
+    trait_name_list          jsonb     default '{}'::jsonb                                                    not null,
+    analysis_status_code     varchar                                                                          not null
+        constraint fk_gwas_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    creation_user            varchar                                                                          not null,
+    creation_date            timestamp default now()                                                          not null,
+    analysis_title           varchar
+);
+
+comment on table public.analysis_gwas is '오믹스데이터 분석 - GWAS 테이블';
+
+comment on column public.analysis_gwas.gwas_id is 'GWAS 아이디';
+
+comment on column public.analysis_gwas.project_id is '과제 아이디';
+
+comment on column public.analysis_gwas.crops_id is '작목 아이디';
+
+comment on column public.analysis_gwas.genotype_id is '유전형 데이터 아이디. 유전형';
+
+comment on column public.analysis_gwas.trait_id is '분석 데이터 아이디. 분석';
+
+comment on column public.analysis_gwas.duplication_data_process is '중복된 데이터 처리. 중복된';
+
+comment on column public.analysis_gwas.analysis_model is '분석 모델. 분석';
+
+comment on column public.analysis_gwas.trait_name_list is '분석 데이터 컬럼. 분석';
+
+comment on column public.analysis_gwas.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_gwas.creation_user is '등록 사용자. 등록';
+
+comment on column public.analysis_gwas.creation_date is '등록 시점. 등록';
+
+alter table public.analysis_gwas
+    owner to postgres;
+
+create table public.analysis_snp_browser_list
+(
+    browser_list_id      varchar   default ('SNP'::text ||
+                                            lpad((nextval('seq_snp_id'::regclass))::text, 6, '0'::text)) not null
+        constraint pk_analysis_snp_list_t
+            primary key,
+    project_id           varchar                                                                         not null,
+    crops_id             varchar                                                                         not null
+        constraint fk_snp_list_crop
+            references public.crops
+            on update restrict on delete restrict,
+    genotype_id          varchar                                                                         not null,
+    reference_genome_id  varchar                                                                         not null
+        constraint fk_snp_list_refgenome
+            references public.reference_genome
+            on update restrict on delete restrict,
+    analysis_status_code varchar                                                                         not null
+        constraint fk_snp_list_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    creation_user        varchar                                                                         not null,
+    creation_date        timestamp default now()                                                         not null,
+    title                varchar
+);
+
+comment on table public.analysis_snp_browser_list is '오믹스데이터 분석 - SNP 브라우저 목록 테이블';
+
+comment on column public.analysis_snp_browser_list.browser_list_id is 'SNP 목록 아이디';
+
+comment on column public.analysis_snp_browser_list.project_id is '과제 아이디';
+
+comment on column public.analysis_snp_browser_list.crops_id is '작목 아이디. 작목';
+
+comment on column public.analysis_snp_browser_list.genotype_id is '유전형 데이터 아이디. 유전형';
+
+comment on column public.analysis_snp_browser_list.reference_genome_id is '참조유전체 아이디. 참조유전체';
+
+comment on column public.analysis_snp_browser_list.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_snp_browser_list.creation_user is '등록 사용자. 등록';
+
+comment on column public.analysis_snp_browser_list.creation_date is '등록 시점. 등록';
+
+alter table public.analysis_snp_browser_list
+    owner to postgres;
+
+create table public.analysis_statistics
+(
+    statistics_id        varchar default ('STATS'::text ||
+                                          lpad((nextval('seq_statistics_id'::regclass))::text, 5, '0'::text)) not null
+        constraint pk_analysis_statistics_t
+            primary key,
+    project_id           varchar                                                                              not null,
+    crops_id             varchar                                                                              not null
+        constraint fk_statistics_crop
+            references public.crops
+            on update restrict on delete restrict,
+    trait_id             varchar                                                                              not null,
+    trait_name           jsonb                                                                                not null,
+    type                 varchar                                                                              not null,
+    dependent_variable   varchar,
+    analysis_status_code varchar                                                                              not null
+        constraint fk_statistics_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    creation_user        varchar                                                                              not null,
+    creation_date        timestamp                                                                            not null,
+    title                varchar                                                                              not null
+);
+
+comment on table public.analysis_statistics is '오믹스데이터 분석 - 통계분석 테이블';
+
+comment on column public.analysis_statistics.statistics_id is '통계분석 아이디';
+
+comment on column public.analysis_statistics.project_id is '과제 아이디';
+
+comment on column public.analysis_statistics.crops_id is '작목 아이디. 작목';
+
+comment on column public.analysis_statistics.trait_id is '형질 데이터 아이디. 형질';
+
+comment on column public.analysis_statistics.trait_name is '형질명 목록. 형질명';
+
+comment on column public.analysis_statistics.type is '통계분석 유형. 통계분석';
+
+comment on column public.analysis_statistics.dependent_variable is '회귀분석 - 종속변수';
+
+comment on column public.analysis_statistics.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_statistics.creation_user is '등록 사용자. 등록';
+
+comment on column public.analysis_statistics.creation_date is '등록 시점. 등록';
+
+alter table public.analysis_statistics
+    owner to postgres;
+
+create table public.analysis_transcriptome
+(
+    analysis_transcriptome_id varchar default ('TRANS'::text ||
+                                               lpad((nextval('seq_transcriptome_id'::regclass))::text, 5,
+                                                    '0'::text)) not null
+        constraint pk_analysis_transcriptome_t
+            primary key,
+    project_id                varchar                           not null,
+    crops_id                  varchar                           not null
+        constraint fk_transcriptome_crop
+            references public.crops
+            on update restrict on delete restrict,
+    title                     varchar                           not null,
+    reference_genome_id       varchar                           not null
+        constraint fk_transcriptome_refgenome
+            references public.reference_genome
+            on update restrict on delete restrict,
+    transcriptome_id          varchar                           not null,
+    analysis_status_code      varchar                           not null
+        constraint fk_transcriptome_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    creation_user             varchar                           not null,
+    creation_date             timestamp                         not null
+);
+
+comment on table public.analysis_transcriptome is '오믹스데이터 분석 - 전사체분석 테이블';
+
+comment on column public.analysis_transcriptome.analysis_transcriptome_id is '전사체분석 아이디';
+
+comment on column public.analysis_transcriptome.project_id is '과제 아이디';
+
+comment on column public.analysis_transcriptome.crops_id is '작목 아이디. 작목';
+
+comment on column public.analysis_transcriptome.title is '제목. 제목';
+
+comment on column public.analysis_transcriptome.reference_genome_id is '참조유전체 아이디. 참조유전체';
+
+comment on column public.analysis_transcriptome.transcriptome_id is '전사체데이터 아이디. 전사체데이터';
+
+comment on column public.analysis_transcriptome.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_transcriptome.creation_user is '등록 사용자. 등록';
+
+comment on column public.analysis_transcriptome.creation_date is '등록 시점. 등록';
+
+alter table public.analysis_transcriptome
+    owner to postgres;
+
+create table public.member
+(
+    user_id                               varchar                                        not null
+        constraint pk_user_t
+            primary key,
+    password                              varchar,
+    user_name                             varchar                                        not null,
+    smartphone_number                     varchar,
+    organization_position                 varchar,
+    system_authority                      varchar                                        not null,
+    status_account                        varchar   default 'PENDING'::character varying not null,
+    institution                           jsonb,
+    creation_date                         timestamp default now(),
+    creation_user                         varchar,
+    alternative_privacy_collection_agree  boolean   default false                        not null,
+    alternative_temporary_password_update boolean   default false                        not null,
+    update_date                           timestamp default now()
+);
+
+comment on table public.member is '회원 테이블';
+
+comment on column public.member.user_id is '사용자 아이디';
+
+comment on column public.member.password is '비밀번호. 비밀번호';
+
+comment on column public.member.user_name is '사용자 이름. 사용자';
+
+comment on column public.member.smartphone_number is '핸드폰 번호. 핸드폰';
+
+comment on column public.member.organization_position is '직책. 직책';
+
+comment on column public.member.system_authority is '시스템 권한. 시스템';
+
+comment on column public.member.status_account is '계정상태. 계정상태';
+
+comment on column public.member.institution is '소속기관. 소속기관';
+
+alter table public.member
+    owner to postgres;
+
+create table public.bbs
+(
+    bbs_id         varchar default ('BOARD'::text ||
+                                    lpad((nextval('seq_board_id'::regclass))::text, 5, '0'::text)) not null
+        constraint pk_board_t
+            primary key,
+    user_id        varchar                                                                         not null
+        constraint fk_board_user
+            references public.member
+            on update restrict on delete restrict,
+    inquiry_status varchar                                                                         not null,
+    inquiry_type   varchar                                                                         not null,
+    title          varchar                                                                         not null,
+    creation_date  timestamp                                                                       not null
+);
+
+comment on table public.bbs is '게시판 요약';
+
+comment on column public.bbs.bbs_id is '게시판 아이디';
+
+comment on column public.bbs.user_id is '사용자 아이디. 작성자';
+
+comment on column public.bbs.inquiry_status is '문의 현황. 문의';
+
+comment on column public.bbs.inquiry_type is '문의 유형. 문의';
+
+comment on column public.bbs.title is '제목. 제목';
+
+comment on column public.bbs.creation_date is '작성일자. 작성일자';
+
+alter table public.bbs
+    owner to postgres;
+
+create table public.bbs_detail
+(
+    bbs_id       varchar not null
+        constraint board_detail_t_pkey
+            primary key
+        constraint fk_board_detail_t_board_id_board_t_board_id
+            references public.bbs
+            on update restrict on delete restrict,
+    bbs_contents text    not null,
+    parents_id   varchar
+        constraint fk_board_detail_t_parent_id_board_detail_t_board_id
+            references public.bbs_detail
+            on update restrict on delete restrict
+);
+
+comment on table public.bbs_detail is '게시판 상세';
+
+comment on column public.bbs_detail.bbs_id is '게시판 아이디';
+
+comment on column public.bbs_detail.bbs_contents is '상세내용';
+
+comment on column public.bbs_detail.parents_id is '부모 게시판 아이디';
+
+alter table public.bbs_detail
+    owner to postgres;
+
+create table public.bbs_file
+(
+    bbs_file_sequence integer not null,
+    bbs_id            varchar not null
+        constraint fk_board_file_t_board_id_board_detail_t_board_id
+            references public.bbs_detail
+            on update restrict on delete restrict,
+    file_path         varchar not null,
+    file_name         varchar,
+    extension         varchar,
+    constraint pk_board_file_t
+        primary key (bbs_file_sequence, bbs_id)
+);
+
+comment on column public.bbs_file.bbs_file_sequence is '게시판 첨부파일 시퀀스. 게시판';
+
+comment on column public.bbs_file.bbs_id is '게시판 아이디. 게시판';
+
+comment on column public.bbs_file.file_path is '게시판 첨부파일 경로. 게시판';
+
+alter table public.bbs_file
+    owner to postgres;
+
+create table public.crops_permission
+(
+    user_id  varchar not null
+        constraint fk_crop_permission_user
+            references public.member
+            on update restrict on delete restrict,
+    crops_id varchar not null
+        constraint fk_crop_permission_crop
+            references public.crops
+            on update restrict on delete restrict,
+    constraint pk_crop_permission_t
+        primary key (user_id, crops_id)
+);
+
+comment on table public.crops_permission is '작목 권한 테이블';
+
+comment on column public.crops_permission.user_id is '사용자 아이디';
+
+comment on column public.crops_permission.crops_id is '작목 아이디. 작목';
+
+alter table public.crops_permission
+    owner to postgres;
+
+create index crops_permission_crops_id_user_id_index
+    on public.crops_permission (user_id, crops_id);
+
+create table public.breeding_resource_column_output_list
+(
+    breeding_resource_column_output_list_id varchar default ('BREED'::text ||
+                                                             lpad((nextval('seq_breeding_list_id'::regclass))::text, 5,
+                                                                  '0'::text)) not null
+        constraint pk_project_breeding_list_t
+            primary key,
+    project_id                              varchar
+        constraint fk_breeding_list_project
+            references public.project
+            on update restrict on delete restrict,
+    user_id                                 varchar                           not null
+        constraint fk_breeding_list_user
+            references public.member
+            on update restrict on delete restrict,
+    crops_id                                varchar                           not null,
+    breeding_resource_column                jsonb   default '[]'::jsonb
+);
+
+comment on table public.breeding_resource_column_output_list is '육종자원 목록 아이디';
+
+comment on column public.breeding_resource_column_output_list.breeding_resource_column_output_list_id is '육종자원 목록 아이디. 육종자원';
+
+comment on column public.breeding_resource_column_output_list.project_id is '과제 아이디';
+
+comment on column public.breeding_resource_column_output_list.user_id is '사용자 아이디. 사용자';
+
+comment on column public.breeding_resource_column_output_list.breeding_resource_column is '출력컬럼';
+
+alter table public.breeding_resource_column_output_list
+    owner to postgres;
+
+create unique index uk_breeding_column_output_list_idx
+    on public.breeding_resource_column_output_list (COALESCE(project_id, ''::character varying), user_id, crops_id);
+
+create table public.project_share_user
+(
+    project_id              varchar not null
+        constraint fk_project_share_project
+            references public.project
+            on update restrict on delete restrict,
+    user_id                 varchar not null
+        constraint fk_project_share_user
+            references public.member
+            on update restrict on delete restrict,
+    authority_creation_data boolean not null,
+    authority_delete_data   boolean not null,
+    authority_update_data   boolean not null,
+    authority_project       varchar,
+    constraint pk_project_share_user_t
+        primary key (project_id, user_id)
+);
+
+comment on table public.project_share_user is '과제 공유계정 테이블';
+
+comment on column public.project_share_user.project_id is '과제 아이디';
+
+comment on column public.project_share_user.user_id is '사용자 아이디. 사용자';
+
+comment on column public.project_share_user.authority_creation_data is '데이터 등록권한. 데이터';
+
+comment on column public.project_share_user.authority_delete_data is '데이터 삭제권한. 데이터';
+
+comment on column public.project_share_user.authority_update_data is '데이터 수정권한. 데이터';
+
+alter table public.project_share_user
+    owner to postgres;
+
+create unique index member_smartphone_number_user_name_uindex
+    on public.member (smartphone_number, user_name);
+
+create table public.file
+(
+    file_id            varchar   default ('FILE'::text ||
+                                          lpad((nextval('file_id_seq'::regclass))::text, 5, '0'::text)) not null
+        primary key,
+    file_name          varchar(255)                                                                     not null,
+    original_file_name varchar(255)                                                                     not null,
+    file_path          text                                                                             not null,
+    file_size          bigint                                                                           not null
+        constraint file_file_size_check
+            check (file_size > 0),
+    file_extension     varchar(50),
+    title              varchar(255)                                                                     not null,
+    category           varchar(100)                                                                     not null,
+    user_id            varchar(100)                                                                     not null
+        constraint fk_file_uploader
+            references public.member
+            on update cascade on delete cascade,
+    description        text,
+    creation_date      timestamp default CURRENT_TIMESTAMP                                              not null,
+    update_date        timestamp default CURRENT_TIMESTAMP                                              not null
+);
+
+comment on table public.file is '파일 정보 테이블';
+
+comment on column public.file.file_id is '파일 ID (Primary Key) - FILE000001 형식';
+
+comment on column public.file.file_name is '저장된 파일명';
+
+comment on column public.file.original_file_name is '원본 파일명';
+
+comment on column public.file.file_path is '파일 저장 경로';
+
+comment on column public.file.file_size is '파일 크기 (bytes)';
+
+comment on column public.file.file_extension is '파일 확장자';
+
+comment on column public.file.title is '파일 제목';
+
+comment on column public.file.category is '파일 카테고리 (소재, 유전형, 대사체, 표현형 등)';
+
+comment on column public.file.user_id is '업로더 사용자 ID (user_t.uid 참조)';
+
+comment on column public.file.description is '파일 설명';
+
+comment on column public.file.creation_date is '생성일시';
+
+comment on column public.file.update_date is '수정일시';
+
+alter table public.file
+    owner to nihhs;
+
+create index idx_file_uploader_id
+    on public.file (user_id);
+
+create index idx_file_category
+    on public.file (category);
+
+create index idx_file_created_at
+    on public.file (creation_date desc);
+
+create index idx_file_uploader_category
+    on public.file (user_id, category);
+
+create table public.breeding_resource_image
+(
+    breeding_resource_id             varchar                 not null,
+    breeding_resource_image_sequence integer                 not null,
+    file_name                        varchar                 not null,
+    extension                        varchar                 not null,
+    file_path                        varchar                 not null,
+    remark                           varchar                 not null,
+    photograph_gps                   varchar,
+    photography_date                 varchar,
+    creation_date                    timestamp default now() not null,
+    creation_user                    varchar
+);
+
+alter table public.breeding_resource_image
+    owner to nihhs;
+
+create table public.external_data_transmission
+(
+    log_id              varchar default ('EXLG'::text ||
+                                         lpad((nextval('extenal_data_transmission_seq'::regclass))::text, 5,
+                                              '0'::text)) not null
+        constraint extenal_data_transmission_pkey
+            primary key,
+    data_type           varchar                           not null,
+    data_name           varchar                           not null,
+    alternative_success boolean                           not null,
+    creation_user       varchar                           not null,
+    creation_date       varchar                           not null,
+    equipment_key       varchar                           not null,
+    dataset_key         varchar                           not null,
+    transmission_data   varchar
+);
+
+alter table public.external_data_transmission
+    owner to nihhs;
+
+create table public.item_trait
+(
+    item_trait_id                   varchar   default ('TRAIT'::text ||
+                                                       lpad((nextval('seq_trait_id'::regclass))::text, 5, '0'::text)) not null
+        constraint pk_item_trait_t
+            primary key,
+    crops_id                        varchar                                                                           not null
+        constraint fk_item_trait_crop
+            references public.crops
+            on update restrict on delete restrict,
+    alternative_active              boolean                                                                           not null,
+    form_data                       jsonb     default '{}'::jsonb                                                     not null,
+    measurement_method              varchar                                                                           not null,
+    type_classification_dataset     jsonb     default '[]'::jsonb                                                     not null,
+    type_actual_measurement_dataset jsonb     default '{}'::jsonb                                                     not null,
+    type_date_dataset               jsonb     default '{}'::jsonb                                                     not null,
+    synonym                         jsonb     default '[]'::jsonb                                                     not null,
+    creation_user                   varchar,
+    creation_date                   timestamp default now()                                                           not null
+);
+
+alter table public.item_trait
+    owner to nihhs;
+
+create table public.batch_job_instance
+(
+    job_instance_id bigint       not null
+        primary key,
+    version         bigint,
+    job_name        varchar(100) not null,
+    job_key         varchar(32)  not null,
+    constraint job_inst_un
+        unique (job_name, job_key)
+);
+
+alter table public.batch_job_instance
+    owner to nihhs;
+
+create table public.batch_job_execution
+(
+    job_execution_id           bigint    not null
+        primary key,
+    version                    bigint,
+    job_instance_id            bigint    not null
+        constraint job_inst_exec_fk
+            references public.batch_job_instance,
+    create_time                timestamp not null,
+    start_time                 timestamp,
+    end_time                   timestamp,
+    status                     varchar(10),
+    exit_code                  varchar(2500),
+    exit_message               varchar(2500),
+    last_updated               timestamp,
+    job_configuration_location varchar(2500)
+);
+
+alter table public.batch_job_execution
+    owner to nihhs;
+
+create table public.batch_job_execution_params
+(
+    job_execution_id bigint       not null
+        constraint job_exec_params_fk
+            references public.batch_job_execution,
+    type_cd          varchar(6)   not null,
+    key_name         varchar(100) not null,
+    string_val       varchar(250),
+    date_val         timestamp,
+    long_val         bigint,
+    double_val       double precision,
+    identifying      char         not null
+);
+
+alter table public.batch_job_execution_params
+    owner to nihhs;
+
+create table public.batch_step_execution
+(
+    step_execution_id  bigint       not null
+        primary key,
+    version            bigint       not null,
+    step_name          varchar(100) not null,
+    job_execution_id   bigint       not null
+        constraint job_exec_step_fk
+            references public.batch_job_execution,
+    start_time         timestamp    not null,
+    end_time           timestamp,
+    status             varchar(10),
+    commit_count       bigint,
+    read_count         bigint,
+    filter_count       bigint,
+    write_count        bigint,
+    read_skip_count    bigint,
+    write_skip_count   bigint,
+    process_skip_count bigint,
+    rollback_count     bigint,
+    exit_code          varchar(2500),
+    exit_message       varchar(2500),
+    last_updated       timestamp
+);
+
+alter table public.batch_step_execution
+    owner to nihhs;
+
+create table public.batch_step_execution_context
+(
+    step_execution_id  bigint        not null
+        primary key
+        constraint step_exec_ctx_fk
+            references public.batch_step_execution,
+    short_context      varchar(2500) not null,
+    serialized_context text
+);
+
+alter table public.batch_step_execution_context
+    owner to nihhs;
+
+create table public.batch_job_execution_context
+(
+    job_execution_id   bigint        not null
+        primary key
+        constraint job_exec_ctx_fk
+            references public.batch_job_execution,
+    short_context      varchar(2500) not null,
+    serialized_context text
+);
+
+alter table public.batch_job_execution_context
+    owner to nihhs;
+
+create table public.atis_projects_cache
+(
+    id                          bigserial
+        primary key,
+    project_no                  varchar(100) not null
+        unique,
+    creation_year               varchar(10),
+    korean_project_name         text,
+    english_project_name        text,
+    responsible_researcher_name varchar(200),
+    raw_data                    jsonb,
+    created_at                  timestamp with time zone default now(),
+    updated_at                  timestamp with time zone default now()
+);
+
+alter table public.atis_projects_cache
+    owner to nihhs;
+
+create table public.iris_projects_cache
+(
+    id                          bigserial
+        primary key,
+    project_no                  varchar(100) not null,
+    creation_year               varchar(10),
+    korean_project_name         text,
+    english_project_name        text,
+    responsible_researcher_name varchar(200),
+    raw_data                    jsonb,
+    created_at                  timestamp with time zone default now(),
+    updated_at                  timestamp with time zone default now(),
+    pjt_rsrch_no                varchar      not null,
+    unique (project_no, pjt_rsrch_no)
+);
+
+alter table public.iris_projects_cache
+    owner to nihhs;
+
+create table public.atis_batch_execution_log
+(
+    id                      bigserial
+        primary key,
+    job_name                varchar(100) not null,
+    execution_status        varchar(50)  not null,
+    start_time              timestamp with time zone default now(),
+    end_time                timestamp with time zone,
+    total_records_processed integer                  default 0,
+    error_message           text,
+    created_at              timestamp with time zone default now()
+);
+
+alter table public.atis_batch_execution_log
+    owner to nihhs;
+
+create table public.variant_browser_selection
+(
+    vb_selection_id  serial
+        primary key,
+    chr              varchar               not null,
+    pos              integer               not null,
+    snpeff           boolean default false not null,
+    gwas             boolean default false not null,
+    marker_candidate boolean default false,
+    jobid            varchar,
+    cre_user         varchar,
+    cre_date         timestamp,
+    unique (chr, pos, jobid)
+);
+
+alter table public.variant_browser_selection
+    owner to nihhs;
+
+create table public.analysis_snp_browser_sample
+(
+    vcf_id   serial,
+    jobid    varchar,
+    chr      varchar not null,
+    position integer not null,
+    contents json
+);
+
+alter table public.analysis_snp_browser_sample
+    owner to nihhs;
+
+create table public.analysis_phylogenetic
+(
+    title                    varchar                                                                                not null,
+    analysis_status_code     varchar                                                                                not null
+        constraint fk_transcriptome_status
+            references public.analysis_status
+            on update restrict on delete restrict,
+    genotype_id              varchar                                                                                not null,
+    creation_user            varchar                                                                                not null,
+    analysis_phylogenetic_id varchar default ('PHYLO'::text || lpad((nextval('seq_phylogenetic_id'::regclass))::text, 5,
+                                                                    '0'::text))                                     not null
+        constraint pk_analysis_phylogenetic
+            primary key,
+    crops_id                 varchar                                                                                not null
+        constraint fk_transcriptome_crop
+            references public.crops
+            on update restrict on delete restrict,
+    creation_date            timestamp                                                                              not null,
+    project_id               varchar                                                                                not null,
+    reference_genome_id      varchar                                                                                not null
+        constraint fk_transcriptome_refgenome
+            references public.reference_genome
+            on update restrict on delete restrict
+);
+
+comment on table public.analysis_phylogenetic is '오믹스데이터 분석 - 계통분석 테이블';
+
+comment on column public.analysis_phylogenetic.title is '제목. 제목';
+
+comment on column public.analysis_phylogenetic.analysis_status_code is '분석 상태 코드. 분석';
+
+comment on column public.analysis_phylogenetic.genotype_id is '유전형데이터 아이디';
+
+comment on column public.analysis_phylogenetic.creation_user is '등록 사용자. 등록';
+
+comment on column public.analysis_phylogenetic.analysis_phylogenetic_id is '계통분석 아이디';
+
+comment on column public.analysis_phylogenetic.crops_id is '작목 아이디. 작목';
+
+comment on column public.analysis_phylogenetic.creation_date is '등록 시점. 등록';
+
+comment on column public.analysis_phylogenetic.project_id is '과제 아이디';
+
+comment on column public.analysis_phylogenetic.reference_genome_id is '참조유전체 아이디. 참조유전체';
+
+alter table public.analysis_phylogenetic
+    owner to postgres;
+
+create table public.standard_term
+(
+    standard_term_id serial
+        primary key,
+    term_kor         varchar not null,
+    term_eng         varchar not null
+);
+
+alter table public.standard_term
+    owner to nihhs;
+
+create index idx_standard_term_term_kor
+    on public.standard_term (term_kor);
+
+create table public.user_notifications
+(
+    notification_id   bigint generated by default as identity
+        primary key,
+    user_id           varchar(50)  not null,
+    notification_type varchar(50)  not null,
+    title             varchar(255) not null,
+    message           varchar(500),
+    related_id        varchar(100),
+    related_url       varchar(500),
+    is_read           boolean   default false,
+    created_at        timestamp default CURRENT_TIMESTAMP
+);
+
+alter table public.user_notifications
+    owner to nihhs;
+
+create index idx_user_read
+    on public.user_notifications (user_id, is_read);
+
+create index idx_created_at
+    on public.user_notifications (created_at desc);
+
+create table public.breeding_resource_deletion
+(
+    project_id           varchar not null,
+    breeding_resource_id varchar not null,
+    creation_date        timestamp default now(),
+    creation_user        varchar,
+    primary key (project_id, breeding_resource_id)
+);
+
+alter table public.breeding_resource_deletion
+    owner to nihhs;
+

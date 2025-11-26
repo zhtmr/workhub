@@ -1,4 +1,6 @@
-# Welcome to your Lovable project
+# WorkHub - 통합 업무 시스템
+
+업무 효율을 높이는 다양한 도구를 통합 제공하는 웹 기반 업무 시스템입니다.
 
 ## Project info
 
