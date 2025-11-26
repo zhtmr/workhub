@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "excel": {
-      "command": "cmd",
-      "args": ["/c", "npx", "--yes", "@negokaz/excel-mcp-server"]
+      "command": "npx",
+      "args": ["--yes", "@negokaz/excel-mcp-server"]
     }
   }
 }

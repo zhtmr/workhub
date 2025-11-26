@@ -4,17 +4,19 @@ import { DDLUploader } from "@/components/DDLUploader";
 import { TablePreview } from "@/components/TablePreview";
 import { ErdViewer } from "@/components/ErdViewer";
 import { DebugInfo, ParseStats } from "@/components/DebugInfo";
+import { ExportSettingsDialog } from "@/components/ExportSettingsDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { parseDDL, Table, DatabaseType, ParseResult } from "@/utils/ddlParser";
-import { exportToExcel } from "@/utils/excelExporter";
+import { exportToExcelWithMetadata } from "@/utils/excelExporter";
 import { useHistory } from "@/hooks/use-history";
 import { useAuth } from "@/providers/AuthProvider";
 import { FileSpreadsheet, Wand2, Database, Network, Bug, Save } from "lucide-react";
 import { toast } from "sonner";
+import { ExportMetadata } from "@/types/excel";
 
 interface LocationState {
   ddlContent?: string;
@@ -28,6 +30,7 @@ const DdlConverter = () => {
   const [dbType, setDbType] = useState<DatabaseType>('auto');
   const [debugMode, setDebugMode] = useState(false);
   const [parseStats, setParseStats] = useState<ParseStats | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   const location = useLocation();
   const { user } = useAuth();
@@ -126,15 +129,19 @@ const DdlConverter = () => {
     }
   };
 
-  const handleExport = () => {
+  const handleExportClick = () => {
     if (parsedTables.length === 0) {
       toast.error("먼저 DDL을 변환해주세요.");
       return;
     }
+    setExportDialogOpen(true);
+  };
 
+  const handleExport = (metadata: ExportMetadata) => {
     try {
-      exportToExcel(parsedTables);
-      toast.success("엑셀 파일이 다운로드되었습니다.");
+      const filename = `${metadata.systemName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_테이블정의서.xlsx`;
+      exportToExcelWithMetadata(parsedTables, metadata, filename);
+      toast.success("테이블 정의서가 다운로드되었습니다.");
     } catch (error) {
       console.error("Export error:", error);
       toast.error("엑셀 파일 생성 중 오류가 발생했습니다.");
@@ -307,8 +314,8 @@ CREATE TABLE comments (
           </Tabs>
           
           {parsedTables.length > 0 && (
-            <Button 
-              onClick={handleExport} 
+            <Button
+              onClick={handleExportClick}
               className="w-full"
               size="lg"
               variant="default"
@@ -319,6 +326,13 @@ CREATE TABLE comments (
           )}
         </div>
       </div>
+
+      {/* 내보내기 설정 다이얼로그 */}
+      <ExportSettingsDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        onExport={handleExport}
+      />
 
       {/* Info Section */}
       <div className="mt-12 grid md:grid-cols-4 gap-6">
