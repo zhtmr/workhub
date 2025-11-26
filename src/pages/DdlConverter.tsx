@@ -1,15 +1,20 @@
 import { useState } from "react";
 import { DDLUploader } from "@/components/DDLUploader";
 import { TablePreview } from "@/components/TablePreview";
+import { ErdViewer } from "@/components/ErdViewer";
 import { Button } from "@/components/ui/button";
-import { parseDDL, Table } from "@/utils/ddlParser";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { parseDDL, Table, DatabaseType } from "@/utils/ddlParser";
 import { exportToExcel } from "@/utils/excelExporter";
-import { FileSpreadsheet, Wand2, Database } from "lucide-react";
+import { FileSpreadsheet, Wand2, Database, Network } from "lucide-react";
 import { toast } from "sonner";
 
 const DdlConverter = () => {
   const [ddlText, setDdlText] = useState("");
   const [parsedTables, setParsedTables] = useState<Table[]>([]);
+  const [dbType, setDbType] = useState<DatabaseType>('auto');
 
   const handleParse = () => {
     if (!ddlText.trim()) {
@@ -18,13 +23,16 @@ const DdlConverter = () => {
     }
 
     try {
-      const tables = parseDDL(ddlText);
+      const tables = parseDDL(ddlText, dbType);
       if (tables.length === 0) {
         toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
         return;
       }
       setParsedTables(tables);
-      toast.success(`${tables.length}개의 테이블을 파싱했습니다.`);
+      
+      // 관계 정보 표시
+      const totalRelations = tables.reduce((sum, t) => sum + t.foreignKeys.length, 0);
+      toast.success(`${tables.length}개의 테이블과 ${totalRelations}개의 관계를 파싱했습니다.`);
     } catch (error) {
       console.error("Parsing error:", error);
       toast.error("DDL 파싱 중 오류가 발생했습니다.");
@@ -46,7 +54,8 @@ const DdlConverter = () => {
     }
   };
 
-  const sampleDDL = `CREATE TABLE users (
+  const sampleDDL = `-- MySQL 예제
+CREATE TABLE users (
   id INT PRIMARY KEY AUTO_INCREMENT COMMENT '사용자 ID',
   username VARCHAR(50) NOT NULL COMMENT '사용자명',
   email VARCHAR(100) NOT NULL UNIQUE COMMENT '이메일',
@@ -58,12 +67,48 @@ CREATE TABLE orders (
   user_id INT NOT NULL COMMENT '사용자 ID',
   order_date DATETIME NOT NULL COMMENT '주문일시',
   total_amount DECIMAL(10,2) NOT NULL COMMENT '총 금액',
-  status VARCHAR(20) DEFAULT 'pending' COMMENT '주문 상태'
-) COMMENT = '주문 정보 테이블';`;
+  status VARCHAR(20) DEFAULT 'pending' COMMENT '주문 상태',
+  FOREIGN KEY (user_id) REFERENCES users(id)
+) COMMENT = '주문 정보 테이블';
 
-  const loadSample = () => {
-    setDdlText(sampleDDL);
-    toast.info("샘플 DDL을 불러왔습니다.");
+CREATE TABLE order_items (
+  item_id INT PRIMARY KEY AUTO_INCREMENT COMMENT '항목 ID',
+  order_id INT NOT NULL COMMENT '주문 ID',
+  product_name VARCHAR(100) NOT NULL COMMENT '상품명',
+  quantity INT NOT NULL COMMENT '수량',
+  price DECIMAL(10,2) NOT NULL COMMENT '가격',
+  FOREIGN KEY (order_id) REFERENCES orders(order_id)
+) COMMENT = '주문 항목 테이블';`;
+
+  const samplePostgreSQL = `-- PostgreSQL 예제
+CREATE TABLE users (
+  id SERIAL PRIMARY KEY,
+  username VARCHAR(50) NOT NULL,
+  email VARCHAR(100) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE posts (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  title VARCHAR(200) NOT NULL,
+  content TEXT,
+  published BOOLEAN DEFAULT false,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE comments (
+  id SERIAL PRIMARY KEY,
+  post_id INTEGER NOT NULL REFERENCES posts(id),
+  user_id INTEGER NOT NULL REFERENCES users(id),
+  content TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);`;
+
+  const loadSample = (type: 'mysql' | 'postgresql' = 'mysql') => {
+    setDdlText(type === 'mysql' ? sampleDDL : samplePostgreSQL);
+    setDbType(type);
+    toast.info(`${type.toUpperCase()} 샘플 DDL을 불러왔습니다.`);
   };
 
   return (
@@ -89,28 +134,65 @@ CREATE TABLE orders (
         <div className="space-y-4">
           <DDLUploader onDDLChange={setDdlText} ddlText={ddlText} />
           
-          <div className="flex gap-2">
-            <Button 
-              onClick={handleParse} 
-              className="flex-1"
-              size="lg"
-            >
-              <Wand2 className="w-4 h-4 mr-2" />
-              DDL 변환
-            </Button>
-            <Button 
-              onClick={loadSample} 
-              variant="outline"
-              size="lg"
-            >
-              샘플 로드
-            </Button>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>데이터베이스 타입</Label>
+              <Select value={dbType} onValueChange={(value) => setDbType(value as DatabaseType)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="데이터베이스 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">자동 감지</SelectItem>
+                  <SelectItem value="mysql">MySQL</SelectItem>
+                  <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2">
+              <Button 
+                onClick={handleParse} 
+                className="flex-1"
+                size="lg"
+              >
+                <Wand2 className="w-4 h-4 mr-2" />
+                DDL 변환
+              </Button>
+              <Select onValueChange={(value) => loadSample(value as 'mysql' | 'postgresql')}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="샘플 로드" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mysql">MySQL 샘플</SelectItem>
+                  <SelectItem value="postgresql">PostgreSQL 샘플</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
 
-        {/* Right Panel - Preview */}
+        {/* Right Panel - Preview & ERD */}
         <div className="space-y-4">
-          <TablePreview tables={parsedTables} />
+          <Tabs defaultValue="tables" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="tables">
+                <Database className="w-4 h-4 mr-2" />
+                테이블 정의
+              </TabsTrigger>
+              <TabsTrigger value="erd">
+                <Network className="w-4 h-4 mr-2" />
+                ERD
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="tables" className="mt-4">
+              <TablePreview tables={parsedTables} />
+            </TabsContent>
+            
+            <TabsContent value="erd" className="mt-4">
+              <ErdViewer tables={parsedTables} />
+            </TabsContent>
+          </Tabs>
           
           {parsedTables.length > 0 && (
             <Button 
@@ -127,14 +209,14 @@ CREATE TABLE orders (
       </div>
 
       {/* Info Section */}
-      <div className="mt-12 grid md:grid-cols-3 gap-6">
+      <div className="mt-12 grid md:grid-cols-4 gap-6">
         <div className="p-6 rounded-lg bg-card border border-border">
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <span className="text-primary font-bold">1</span>
           </div>
           <h3 className="font-semibold mb-2 text-card-foreground">DDL 입력</h3>
           <p className="text-sm text-muted-foreground">
-            파일 업로드 또는 직접 CREATE TABLE 문을 입력합니다.
+            MySQL, PostgreSQL 등 다양한 DB의 DDL을 입력합니다.
           </p>
         </div>
         
@@ -142,9 +224,9 @@ CREATE TABLE orders (
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <span className="text-primary font-bold">2</span>
           </div>
-          <h3 className="font-semibold mb-2 text-card-foreground">변환 및 미리보기</h3>
+          <h3 className="font-semibold mb-2 text-card-foreground">테이블 정의서</h3>
           <p className="text-sm text-muted-foreground">
-            DDL을 파싱하여 테이블 정의서 형태로 미리보기합니다.
+            컬럼 정보와 제약조건을 포함한 상세 정의서를 확인합니다.
           </p>
         </div>
         
@@ -152,9 +234,19 @@ CREATE TABLE orders (
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <span className="text-primary font-bold">3</span>
           </div>
-          <h3 className="font-semibold mb-2 text-card-foreground">엑셀 다운로드</h3>
+          <h3 className="font-semibold mb-2 text-card-foreground">ERD 생성</h3>
           <p className="text-sm text-muted-foreground">
-            각 테이블별 시트와 전체 통합 시트로 구성된 엑셀 파일을 다운로드합니다.
+            테이블 간 관계를 자동으로 분석하여 ERD를 생성합니다.
+          </p>
+        </div>
+        
+        <div className="p-6 rounded-lg bg-card border border-border">
+          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <span className="text-primary font-bold">4</span>
+          </div>
+          <h3 className="font-semibold mb-2 text-card-foreground">엑셀 내보내기</h3>
+          <p className="text-sm text-muted-foreground">
+            테이블별 시트와 통합 시트로 엑셀 파일을 다운로드합니다.
           </p>
         </div>
       </div>
