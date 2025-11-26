@@ -27,14 +27,45 @@ export interface Table {
   }[];
 }
 
+export interface ParseError {
+  line?: number;
+  tableName?: string;
+  columnName?: string;
+  error: string;
+  context?: string;
+}
+
+export interface ParseResult {
+  tables: Table[];
+  errors: ParseError[];
+  warnings: string[];
+  stats: {
+    totalTables: number;
+    successfulTables: number;
+    failedTables: number;
+    totalColumns: number;
+    parseTime: number;
+  };
+}
+
 export type DatabaseType = 'mysql' | 'postgresql' | 'auto';
 
-export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto'): Table[] {
+export function parseDDL(ddlText: string, dbType?: DatabaseType): Table[];
+export function parseDDL(ddlText: string, dbType: DatabaseType, debug: true): ParseResult;
+export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto', debug: boolean = false): ParseResult | Table[] {
+  const startTime = performance.now();
+  const errors: ParseError[] = [];
+  const warnings: string[] = [];
   const tables: Table[] = [];
+  let tableCount = 0;
+  let failedTableCount = 0;
   
   // 데이터베이스 타입 자동 감지
   if (dbType === 'auto') {
     dbType = detectDatabaseType(ddlText);
+    if (debug) {
+      warnings.push(`데이터베이스 타입이 자동으로 '${dbType}'로 감지되었습니다.`);
+    }
   }
   
   // CREATE TABLE 문 찾기 - 수동으로 괄호 매칭하여 정확히 추출
@@ -42,9 +73,11 @@ export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto'): Table[
   
   let match;
   while ((match = createTablePattern.exec(ddlText)) !== null) {
+    tableCount++;
     const schema = match[1];
     const tableName = match[2];
     const startPos = match.index + match[0].length; // '(' 다음 위치
+    const lineNumber = ddlText.substring(0, match.index).split('\n').length;
     
     // 괄호 depth를 세면서 CREATE TABLE의 끝을 찾기
     let depth = 1;
@@ -77,21 +110,48 @@ export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto'): Table[
     }
     
     if (depth === 0) {
-      const columnsText = ddlText.substring(startPos, endPos - 1); // 마지막 ')' 제외
-      
-      // 인라인 테이블 코멘트 찾기 (MySQL 스타일)
-      const remainingText = ddlText.substring(endPos, endPos + 200);
-      const inlineCommentMatch = remainingText.match(/^\s*COMMENT\s*=?\s*['"]([^'"]*?)['"]/i);
-      const inlineTableComment = inlineCommentMatch ? inlineCommentMatch[1] : '';
-      
-      const { columns, primaryKeys, foreignKeys } = parseColumns(columnsText, dbType);
-      
-      tables.push({
-        name: tableName, // 스키마명 제거한 순수 테이블명
-        comment: inlineTableComment,
-        columns,
-        primaryKeys,
-        foreignKeys
+      try {
+        const columnsText = ddlText.substring(startPos, endPos - 1); // 마지막 ')' 제외
+        
+        // 인라인 테이블 코멘트 찾기 (MySQL 스타일)
+        const remainingText = ddlText.substring(endPos, endPos + 200);
+        const inlineCommentMatch = remainingText.match(/^\s*COMMENT\s*=?\s*['"]([^'"]*?)['"]/i);
+        const inlineTableComment = inlineCommentMatch ? inlineCommentMatch[1] : '';
+        
+        const { columns, primaryKeys, foreignKeys } = parseColumns(columnsText, dbType, debug, errors, tableName, lineNumber);
+        
+        if (columns.length === 0) {
+          failedTableCount++;
+          errors.push({
+            line: lineNumber,
+            tableName,
+            error: '컬럼을 파싱할 수 없습니다. CREATE TABLE 문법을 확인해주세요.',
+            context: columnsText.substring(0, 200) + (columnsText.length > 200 ? '...' : '')
+          });
+        } else {
+          tables.push({
+            name: tableName, // 스키마명 제거한 순수 테이블명
+            comment: inlineTableComment,
+            columns,
+            primaryKeys,
+            foreignKeys
+          });
+        }
+      } catch (error) {
+        failedTableCount++;
+        errors.push({
+          line: lineNumber,
+          tableName,
+          error: error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.',
+          context: ddlText.substring(match.index, Math.min(match.index + 300, ddlText.length))
+        });
+      }
+    } else {
+      failedTableCount++;
+      errors.push({
+        line: lineNumber,
+        tableName,
+        error: '괄호 매칭 오류: CREATE TABLE 문의 괄호가 올바르게 닫히지 않았습니다.'
       });
     }
   }
@@ -101,6 +161,24 @@ export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto'): Table[
   
   // ALTER TABLE에서 외래키 추가 파싱
   parseAlterTableForeignKeys(ddlText, tables, dbType);
+  
+  const endTime = performance.now();
+  const totalColumns = tables.reduce((sum, table) => sum + table.columns.length, 0);
+  
+  if (debug) {
+    return {
+      tables,
+      errors,
+      warnings,
+      stats: {
+        totalTables: tableCount,
+        successfulTables: tables.length,
+        failedTables: failedTableCount,
+        totalColumns,
+        parseTime: Math.round(endTime - startTime)
+      }
+    };
+  }
   
   return tables;
 }
@@ -198,7 +276,14 @@ function splitColumnDefinitions(text: string): string[] {
   return definitions;
 }
 
-function parseColumns(columnsText: string, dbType: DatabaseType) {
+function parseColumns(
+  columnsText: string, 
+  dbType: DatabaseType, 
+  debug: boolean = false, 
+  errors: ParseError[] = [], 
+  tableName: string = '', 
+  startLine: number = 0
+) {
   const columns: Column[] = [];
   const primaryKeys: string[] = [];
   const foreignKeys: {
@@ -238,27 +323,39 @@ function parseColumns(columnsText: string, dbType: DatabaseType) {
   // 컬럼 정의를 콤마로 분리 (여러 줄에 걸친 컬럼 정의 처리)
   const columnDefinitions = splitColumnDefinitions(columnsText);
   
-  for (const columnDef of columnDefinitions) {
-    // 제약조건 라인은 스킵
-    const trimmedDef = columnDef.trim().toUpperCase();
-    if (trimmedDef.match(/^(PRIMARY\s+KEY|FOREIGN\s+KEY|INDEX|KEY|UNIQUE\s+KEY|CHECK)\s*\(/)) {
-      continue;
-    }
+  for (let i = 0; i < columnDefinitions.length; i++) {
+    const columnDef = columnDefinitions[i];
     
-    // CONSTRAINT만 있는 줄도 스킵 (컬럼 정의가 아닌 경우)
-    if (trimmedDef.startsWith('CONSTRAINT') && 
-        !trimmedDef.includes('PRIMARY KEY') &&
-        !columnDef.trim().match(/^\w+\s+\w+/)) {
-      continue;
-    }
+    try {
+      // 제약조건 라인은 스킵
+      const trimmedDef = columnDef.trim().toUpperCase();
+      if (trimmedDef.match(/^(PRIMARY\s+KEY|FOREIGN\s+KEY|INDEX|KEY|UNIQUE\s+KEY|CHECK)\s*\(/)) {
+        continue;
+      }
+      
+      // CONSTRAINT만 있는 줄도 스킵 (컬럼 정의가 아닌 경우)
+      if (trimmedDef.startsWith('CONSTRAINT') && 
+          !trimmedDef.includes('PRIMARY KEY') &&
+          !columnDef.trim().match(/^\w+\s+\w+/)) {
+        continue;
+      }
     
-    // 전체 정의를 하나의 문자열로 (줄바꿈과 탭을 공백으로 변환, 여러 공백을 하나로)
-    const fullDef = columnDef.replace(/[\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim();
-    
-    // 컬럼 이름과 타입 추출
-    const words = fullDef.split(/\s+/);
-    
-    if (words.length < 2) continue;
+      // 전체 정의를 하나의 문자열로 (줄바꿈과 탭을 공백으로 변환, 여러 공백을 하나로)
+      const fullDef = columnDef.replace(/[\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+      
+      // 컬럼 이름과 타입 추출
+      const words = fullDef.split(/\s+/);
+      
+      if (words.length < 2) {
+        if (debug && fullDef.length > 0) {
+          errors.push({
+            tableName,
+            error: '컬럼 정의가 불완전합니다. 최소한 컬럼명과 타입이 필요합니다.',
+            context: fullDef
+          });
+        }
+        continue;
+      }
     
     const columnName = words[0];
     
@@ -405,17 +502,27 @@ function parseColumns(columnsText: string, dbType: DatabaseType) {
       comment = commentMatch[1];
     }
     
-    columns.push({
-      name: columnName,
-      dataType,
-      nullable,
-      key,
-      defaultValue,
-      comment,
-      isPrimaryKey,
-      isForeignKey: isForeignKey || !!inlineRefMatch,
-      references
-    });
+      columns.push({
+        name: columnName,
+        dataType,
+        nullable,
+        key,
+        defaultValue,
+        comment,
+        isPrimaryKey,
+        isForeignKey: isForeignKey || !!inlineRefMatch,
+        references
+      });
+    } catch (error) {
+      if (debug) {
+        errors.push({
+          tableName,
+          columnName: columnDef.split(/\s+/)[0],
+          error: error instanceof Error ? error.message : '컬럼 파싱 중 오류가 발생했습니다.',
+          context: columnDef.substring(0, 150)
+        });
+      }
+    }
   }
   
   return { columns, primaryKeys, foreignKeys };
