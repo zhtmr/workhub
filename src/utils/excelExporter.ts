@@ -1,14 +1,6 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Table, Column } from './ddlParser';
 import { ExportMetadata } from '@/types/excel';
-
-// 키 타입 계산 (PK, FK 등 조합)
-function getKeyType(column: Column): string {
-  const keys: string[] = [];
-  if (column.key) keys.push(column.key);
-  if (column.isForeignKey) keys.push('FK');
-  return keys.join(', ');
-}
 
 // 데이터 타입에서 길이 추출
 function extractLength(dataType: string): string {
@@ -21,383 +13,259 @@ function extractBaseType(dataType: string): string {
   return dataType.replace(/\(.*\)/, '').toLowerCase();
 }
 
-// 표지 시트 생성
-function createCoverSheet(metadata: ExportMetadata): XLSX.WorkSheet {
-  const data: (string | null)[][] = [
-    // 빈 행들 (상단 여백)
-    [null, null, null, null, null, null, null, null],
-    // 시스템명 (병합될 영역)
-    [metadata.systemName, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    // 테이블정의서 제목
-    [null, '테이블정의서', null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    [null, null, null, null, null, null, null, null],
-    // 문서 정보
-    [null, '문   서   명', '테이블정의서', null, null, '작성자', metadata.author, null],
-    [null, '문 서 번 호', metadata.documentNumber || '', null, null, null, null, null],
-    [null, '작   성   자', metadata.author, null, null, null, null, null],
-    [null, '작   성   일', metadata.createdDate || '', '버전', metadata.version || 'v1.0', null, null, null],
-  ];
+// 시트 복사 함수 (ExcelJS는 직접 시트 복사를 지원하지 않음)
+async function copyWorksheet(
+  sourceSheet: ExcelJS.Worksheet,
+  targetWorkbook: ExcelJS.Workbook,
+  newName: string
+): Promise<ExcelJS.Worksheet> {
+  const newSheet = targetWorkbook.addWorksheet(newName);
 
-  const worksheet = XLSX.utils.aoa_to_sheet(data);
-
-  // 셀 병합 설정
-  worksheet['!merges'] = [
-    // 시스템명 병합 (A2:H4)
-    { s: { r: 1, c: 0 }, e: { r: 3, c: 7 } },
-    // 테이블정의서 제목 병합 (B5:G5)
-    { s: { r: 4, c: 1 }, e: { r: 4, c: 6 } },
-    // 문서정보 영역 병합
-    { s: { r: 20, c: 2 }, e: { r: 20, c: 4 } }, // 테이블정의서
-    { s: { r: 21, c: 2 }, e: { r: 21, c: 4 } }, // 문서번호
-    { s: { r: 22, c: 2 }, e: { r: 22, c: 4 } }, // 작성자
-  ];
-
-  // 열 너비 설정
-  worksheet['!cols'] = [
-    { wch: 5 },   // A
-    { wch: 15 },  // B
-    { wch: 25 },  // C
-    { wch: 10 },  // D
-    { wch: 10 },  // E
-    { wch: 10 },  // F
-    { wch: 20 },  // G
-    { wch: 5 },   // H
-  ];
-
-  return worksheet;
-}
-
-// 개정이력 시트 생성
-function createRevisionHistorySheet(metadata: ExportMetadata): XLSX.WorkSheet {
-  const data: (string | number | null)[][] = [
-    // 헤더
-    ['테이블 정의서 개정 이력', null, null, null, null, null],
-    ['NO', null, '변경내용', '등록일', null, '등록자'],
-    // 첫 번째 행 (최초작성)
-    [1, null, '최초작성', metadata.createdDate || '', null, metadata.author],
-  ];
-
-  // 빈 행 추가 (40행까지)
-  for (let i = 2; i <= 40; i++) {
-    data.push([i, null, '', '', null, '']);
-  }
-
-  const worksheet = XLSX.utils.aoa_to_sheet(data);
-
-  // 셀 병합 설정
-  worksheet['!merges'] = [
-    // 헤더 제목 병합 (A1:F1)
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-    // NO 열 병합 (A:B)
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
-    // 등록일 열 병합 (D:E)
-    { s: { r: 1, c: 3 }, e: { r: 1, c: 4 } },
-  ];
-
-  // 데이터 행의 NO 열 병합
-  for (let i = 2; i <= 41; i++) {
-    worksheet['!merges']!.push({ s: { r: i, c: 0 }, e: { r: i, c: 1 } });
-    worksheet['!merges']!.push({ s: { r: i, c: 3 }, e: { r: i, c: 4 } });
-  }
-
-  // 열 너비 설정
-  worksheet['!cols'] = [
-    { wch: 5 },   // A (NO)
-    { wch: 5 },   // B (NO 병합)
-    { wch: 40 },  // C (변경내용)
-    { wch: 12 },  // D (등록일)
-    { wch: 12 },  // E (등록일 병합)
-    { wch: 15 },  // F (등록자)
-  ];
-
-  return worksheet;
-}
-
-// 테이블 목록 시트 생성
-function createTableListSheet(tables: Table[], metadata: ExportMetadata): XLSX.WorkSheet {
-  const data: (string | number | null)[][] = [
-    // 헤더
-    ['테이블 목록', null, null, null, null, null],
-    ['NO', null, '스키마 이름', '테이블 이름', null, '테이블 설명'],
-  ];
-
-  // 테이블 목록 추가
-  tables.forEach((table, index) => {
-    data.push([
-      index + 1,
-      null,
-      metadata.schemaName,
-      table.name,
-      null,
-      table.comment || '',
-    ]);
+  // 열 너비 복사
+  sourceSheet.columns.forEach((col, index) => {
+    if (col.width) {
+      newSheet.getColumn(index + 1).width = col.width;
+    }
   });
 
-  // 최소 50행까지 빈 행 추가
-  const currentRows = data.length;
-  for (let i = currentRows; i < 52; i++) {
-    data.push([i - 1, null, '', '', null, '']);
-  }
+  // 행 높이 및 셀 데이터/스타일 복사
+  sourceSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+    const newRow = newSheet.getRow(rowNumber);
+    newRow.height = row.height;
 
-  const worksheet = XLSX.utils.aoa_to_sheet(data);
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      const newCell = newRow.getCell(colNumber);
 
-  // 셀 병합 설정
-  worksheet['!merges'] = [
-    // 헤더 제목 병합 (A1:F1)
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-    // NO 열 병합 (A:B)
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
-    // 테이블 이름 열 병합 (D:E)
-    { s: { r: 1, c: 3 }, e: { r: 1, c: 4 } },
-  ];
+      // 값 복사 (수식 제외, 값만)
+      newCell.value = cell.value;
 
-  // 데이터 행의 병합
-  for (let i = 2; i < data.length; i++) {
-    worksheet['!merges']!.push({ s: { r: i, c: 0 }, e: { r: i, c: 1 } });
-    worksheet['!merges']!.push({ s: { r: i, c: 3 }, e: { r: i, c: 4 } });
-  }
+      // 스타일 복사
+      if (cell.style) {
+        newCell.style = JSON.parse(JSON.stringify(cell.style));
+      }
+    });
+  });
 
-  // 열 너비 설정
-  worksheet['!cols'] = [
-    { wch: 5 },   // A (NO)
-    { wch: 5 },   // B (NO 병합)
-    { wch: 15 },  // C (스키마 이름)
-    { wch: 30 },  // D (테이블 이름)
-    { wch: 15 },  // E (테이블 이름 병합)
-    { wch: 30 },  // F (테이블 설명)
-  ];
+  // 병합된 셀 복사
+  sourceSheet.model.merges?.forEach((merge) => {
+    newSheet.mergeCells(merge);
+  });
 
-  return worksheet;
+  return newSheet;
 }
 
-// 테이블별 시트 생성
-function createTableSheet(table: Table, metadata: ExportMetadata): XLSX.WorkSheet {
-  const data: (string | number | null)[][] = [
-    // 상단 구분선 역할
-    ['\\', null, null, null, null, null, null, null, null, null],
-    // 헤더 정보
-    ['시스템명', null, ` ${metadata.systemName}`, null, '작성일', null, ` ${metadata.createdDate}`, null, null, null],
-    ['데이터베이스명', null, ` ${metadata.databaseName}`, null, '스키마명', null, ` ${metadata.schemaName}`, null, null, null],
-    ['테이블명', null, ` ${table.name}`, null, '신규/변경여부', null, ' Y', null, null, null],
-    ['테이블 설명', null, table.comment || '', null, null, null, null, null, null, null],
-    // 컬럼 헤더
-    ['NO', null, '칼럼명', 'TYPE', '길이', 'PK', 'FK', 'NULL', 'DEFAULT', '컬럼설명'],
-  ];
+// 표지 시트 업데이트
+function updateCoverSheet(sheet: ExcelJS.Worksheet, metadata: ExportMetadata): void {
+  // 시스템명 (A10 - 병합된 셀)
+  sheet.getCell('A10').value = metadata.systemName;
 
-  // 컬럼 데이터 추가
+  // 문서정보 (B33-G36 영역)
+  sheet.getCell('C33').value = '테이블정의서';
+  sheet.getCell('G33').value = metadata.author;
+  sheet.getCell('C34').value = metadata.documentNumber || '';
+  sheet.getCell('C35').value = metadata.author;
+  sheet.getCell('C36').value = metadata.createdDate || '';
+  sheet.getCell('E36').value = metadata.version || 'v1.0';
+}
+
+// 개정이력 시트 업데이트
+function updateRevisionHistorySheet(sheet: ExcelJS.Worksheet, metadata: ExportMetadata): void {
+  // 첫 번째 데이터 행 (A3)
+  sheet.getCell('A3').value = 1;
+  sheet.getCell('C3').value = '최초작성';
+  sheet.getCell('D3').value = metadata.createdDate || '';
+  sheet.getCell('F3').value = metadata.author;
+}
+
+// 테이블 목록 시트 업데이트
+function updateTableListSheet(
+  sheet: ExcelJS.Worksheet,
+  tables: Table[],
+  metadata: ExportMetadata
+): void {
+  tables.forEach((table, index) => {
+    const rowNumber = index + 3; // A3부터 시작
+    sheet.getCell(`A${rowNumber}`).value = index + 1;
+    sheet.getCell(`C${rowNumber}`).value = metadata.schemaName;
+    sheet.getCell(`D${rowNumber}`).value = table.name;
+    sheet.getCell(`F${rowNumber}`).value = table.comment || '';
+  });
+}
+
+// 테이블 시트 업데이트
+function updateTableSheet(
+  sheet: ExcelJS.Worksheet,
+  table: Table,
+  metadata: ExportMetadata
+): void {
+  // 헤더 정보 업데이트 (A2-J5 영역)
+  // 시스템명
+  sheet.getCell('C2').value = ` ${metadata.systemName}`;
+  // 작성일
+  sheet.getCell('G2').value = ` ${metadata.createdDate}`;
+  // 데이터베이스명
+  sheet.getCell('C3').value = ` ${metadata.databaseName}`;
+  // 스키마명
+  sheet.getCell('G3').value = ` ${metadata.schemaName}`;
+  // 테이블명
+  sheet.getCell('C4').value = ` ${table.name}`;
+  // 신규/변경여부
+  sheet.getCell('G4').value = ' Y';
+  // 테이블 설명
+  sheet.getCell('C5').value = table.comment || '';
+
+  // 컬럼 데이터 입력 (A7부터)
   table.columns.forEach((column, index) => {
+    const rowNumber = index + 7;
     const isPK = column.key === 'PK' || column.key === 'PRI';
     const isFK = column.isForeignKey;
     const hasAutoIncrement = column.defaultValue?.toLowerCase().includes('auto') ||
       column.dataType.toLowerCase().includes('serial');
 
-    data.push([
-      index + 1,
-      null,
-      column.name,
-      extractBaseType(column.dataType),
-      extractLength(column.dataType),
-      isPK ? 'Y' : '-',
-      isFK ? 'Y' : '-',
-      column.nullable ? 'Y' : 'N',
-      hasAutoIncrement ? 'auto' : (column.defaultValue || ''),
-      column.comment || '',
-    ]);
+    sheet.getCell(`A${rowNumber}`).value = index + 1;
+    sheet.getCell(`C${rowNumber}`).value = column.name;
+    sheet.getCell(`D${rowNumber}`).value = extractBaseType(column.dataType);
+    sheet.getCell(`E${rowNumber}`).value = extractLength(column.dataType);
+    sheet.getCell(`F${rowNumber}`).value = isPK ? 'Y' : '-';
+    sheet.getCell(`G${rowNumber}`).value = isFK ? 'Y' : '-';
+    sheet.getCell(`H${rowNumber}`).value = column.nullable ? 'Y' : 'N';
+    sheet.getCell(`I${rowNumber}`).value = hasAutoIncrement ? 'auto' : (column.defaultValue || '');
+    sheet.getCell(`J${rowNumber}`).value = column.comment || '';
   });
-
-  // 빈 행 추가 (최소 30행까지)
-  const currentRows = data.length;
-  for (let i = currentRows; i < 35; i++) {
-    data.push([null, null, null, null, null, null, null, null, null, null]);
-  }
-
-  // 특이사항 영역
-  data.push([' 특이사항', null, null, null, null, null, null, null, null, null]);
-  data.push([null, null, null, null, null, null, null, null, null, null]);
-
-  const worksheet = XLSX.utils.aoa_to_sheet(data);
-
-  // 셀 병합 설정
-  worksheet['!merges'] = [
-    // 상단 구분선 (A1:J1)
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 9 } },
-    // 시스템명 레이블 (A2:B2)
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
-    // 시스템명 값 (C2:D2)
-    { s: { r: 1, c: 2 }, e: { r: 1, c: 3 } },
-    // 작성일 레이블 (E2:F2)
-    { s: { r: 1, c: 4 }, e: { r: 1, c: 5 } },
-    // 작성일 값 (G2:J2)
-    { s: { r: 1, c: 6 }, e: { r: 1, c: 9 } },
-    // 데이터베이스명 레이블 (A3:B3)
-    { s: { r: 2, c: 0 }, e: { r: 2, c: 1 } },
-    // 데이터베이스명 값 (C3:D3)
-    { s: { r: 2, c: 2 }, e: { r: 2, c: 3 } },
-    // 스키마명 레이블 (E3:F3)
-    { s: { r: 2, c: 4 }, e: { r: 2, c: 5 } },
-    // 스키마명 값 (G3:J3)
-    { s: { r: 2, c: 6 }, e: { r: 2, c: 9 } },
-    // 테이블명 레이블 (A4:B4)
-    { s: { r: 3, c: 0 }, e: { r: 3, c: 1 } },
-    // 테이블명 값 (C4:D4)
-    { s: { r: 3, c: 2 }, e: { r: 3, c: 3 } },
-    // 신규/변경여부 레이블 (E4:F4)
-    { s: { r: 3, c: 4 }, e: { r: 3, c: 5 } },
-    // 신규/변경여부 값 (G4:J4)
-    { s: { r: 3, c: 6 }, e: { r: 3, c: 9 } },
-    // 테이블 설명 레이블 (A5:B5)
-    { s: { r: 4, c: 0 }, e: { r: 4, c: 1 } },
-    // 테이블 설명 값 (C5:J5)
-    { s: { r: 4, c: 2 }, e: { r: 4, c: 9 } },
-    // NO 헤더 (A6:B6)
-    { s: { r: 5, c: 0 }, e: { r: 5, c: 1 } },
-    // 특이사항 (마지막 행)
-    { s: { r: data.length - 2, c: 0 }, e: { r: data.length - 2, c: 9 } },
-  ];
-
-  // 데이터 행의 NO 열 병합
-  for (let i = 6; i < 6 + table.columns.length; i++) {
-    worksheet['!merges']!.push({ s: { r: i, c: 0 }, e: { r: i, c: 1 } });
-  }
-
-  // 열 너비 설정
-  worksheet['!cols'] = [
-    { wch: 5 },   // A (NO)
-    { wch: 5 },   // B (NO 병합)
-    { wch: 25 },  // C (칼럼명)
-    { wch: 12 },  // D (TYPE)
-    { wch: 8 },   // E (길이)
-    { wch: 5 },   // F (PK)
-    { wch: 5 },   // G (FK)
-    { wch: 5 },   // H (NULL)
-    { wch: 15 },  // I (DEFAULT)
-    { wch: 30 },  // J (컬럼설명)
-  ];
-
-  return worksheet;
 }
 
-// 표준 포맷 엑셀 내보내기 (4개 시트)
-export function exportToExcelWithMetadata(
+// 템플릿 기반 엑셀 내보내기 (서식 유지)
+export async function exportToExcelWithTemplate(
   tables: Table[],
   metadata: ExportMetadata,
   filename: string = 'table_definition.xlsx'
-) {
-  const workbook = XLSX.utils.book_new();
+): Promise<void> {
+  try {
+    // 1. 템플릿 파일 로드
+    const response = await fetch('/templates/table_definition_template.xlsx');
+    if (!response.ok) {
+      throw new Error('템플릿 파일을 찾을 수 없습니다.');
+    }
+    const arrayBuffer = await response.arrayBuffer();
 
-  // 1. 표지 시트
-  const coverSheet = createCoverSheet(metadata);
-  XLSX.utils.book_append_sheet(workbook, coverSheet, '표지');
+    // 2. ExcelJS로 워크북 파싱
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(arrayBuffer);
 
-  // 2. 개정이력 시트
-  const revisionSheet = createRevisionHistorySheet(metadata);
-  XLSX.utils.book_append_sheet(workbook, revisionSheet, '개정이력');
+    // 3. 표지 시트 업데이트
+    const coverSheet = workbook.getWorksheet('표지');
+    if (coverSheet) {
+      updateCoverSheet(coverSheet, metadata);
+    }
 
-  // 3. 테이블 목록 시트
-  const tableListSheet = createTableListSheet(tables, metadata);
-  XLSX.utils.book_append_sheet(workbook, tableListSheet, '테이블 설명');
+    // 4. 개정이력 시트 업데이트
+    const revisionSheet = workbook.getWorksheet('개정이력');
+    if (revisionSheet) {
+      updateRevisionHistorySheet(revisionSheet, metadata);
+    }
 
-  // 4. 각 테이블별 시트
-  tables.forEach(table => {
-    const tableSheet = createTableSheet(table, metadata);
-    // 시트 이름은 테이블명 (31자 제한, 특수문자 제거)
-    const sheetName = table.name
-      .replace(/[\\/*?[\]:]/g, '_')
-      .substring(0, 31);
-    XLSX.utils.book_append_sheet(workbook, tableSheet, sheetName);
-  });
+    // 5. 테이블 목록 시트 업데이트
+    const tableListSheet = workbook.getWorksheet('테이블 설명');
+    if (tableListSheet) {
+      updateTableListSheet(tableListSheet, tables, metadata);
+    }
 
-  // 파일 다운로드
-  XLSX.writeFile(workbook, filename);
+    // 6. 템플릿 테이블 시트 가져오기
+    const templateTableSheet = workbook.getWorksheet('user_notifications');
+
+    // 7. 각 테이블별 시트 생성
+    if (templateTableSheet) {
+      for (const table of tables) {
+        const sheetName = table.name.replace(/[\\/*?[\]:]/g, '_').substring(0, 31);
+
+        // 시트 복사
+        const newSheet = await copyWorksheet(workbook, workbook, sheetName);
+
+        // 데이터 업데이트
+        updateTableSheet(newSheet, table, metadata);
+      }
+
+      // 템플릿 시트 삭제
+      workbook.removeWorksheet(templateTableSheet.id);
+    }
+
+    // 8. 파일 다운로드
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+  } catch (error) {
+    console.error('Excel export error:', error);
+    throw error;
+  }
 }
 
-// 기존 간단한 엑셀 내보내기 (호환성 유지)
-export function exportToExcel(tables: Table[], filename: string = 'table_definition.xlsx') {
-  const workbook = XLSX.utils.book_new();
+// 기존 간단한 엑셀 내보내기 (호환성 유지 - xlsx 라이브러리 사용)
+export async function exportToExcelSimple(
+  tables: Table[],
+  metadata: ExportMetadata,
+  filename: string = 'table_definition.xlsx'
+): Promise<void> {
+  const workbook = new ExcelJS.Workbook();
 
   tables.forEach(table => {
-    // 각 테이블을 별도의 시트로 생성
-    const data = [
-      ['테이블명', table.name],
-      ['테이블 설명', table.comment],
-      [],
-      ['컬럼명', '데이터타입', 'NULL 허용', '키', '기본값', '설명']
-    ];
+    const sheet = workbook.addWorksheet(table.name.substring(0, 31));
 
+    // 헤더
+    sheet.addRow(['테이블명', table.name]);
+    sheet.addRow(['테이블 설명', table.comment || '']);
+    sheet.addRow([]);
+    sheet.addRow(['컬럼명', '데이터타입', 'NULL 허용', '키', '기본값', '설명']);
+
+    // 컬럼 데이터
     table.columns.forEach(column => {
-      data.push([
+      const keys: string[] = [];
+      if (column.key) keys.push(column.key);
+      if (column.isForeignKey) keys.push('FK');
+
+      sheet.addRow([
         column.name,
         column.dataType,
         column.nullable ? 'Y' : 'N',
-        getKeyType(column),
-        column.defaultValue,
-        column.comment
+        keys.join(', '),
+        column.defaultValue || '',
+        column.comment || ''
       ]);
     });
 
-    const worksheet = XLSX.utils.aoa_to_sheet(data);
-
-    // 열 너비 설정
-    worksheet['!cols'] = [
-      { wch: 20 }, // 컬럼명
-      { wch: 15 }, // 데이터타입
-      { wch: 10 }, // NULL 허용
-      { wch: 8 },  // 키
-      { wch: 15 }, // 기본값
-      { wch: 30 }  // 설명
+    // 열 너비
+    sheet.columns = [
+      { width: 20 },
+      { width: 15 },
+      { width: 10 },
+      { width: 8 },
+      { width: 15 },
+      { width: 30 }
     ];
-
-    // 시트 이름은 테이블명 (31자 제한)
-    const sheetName = table.name.substring(0, 31);
-    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
   });
 
-  // 모든 테이블을 하나의 시트에 통합한 버전도 추가
-  const allTablesData = [['테이블명', '컬럼명', '데이터타입', 'NULL 허용', '키', '기본값', '설명']];
-
-  tables.forEach(table => {
-    table.columns.forEach(column => {
-      allTablesData.push([
-        table.name,
-        column.name,
-        column.dataType,
-        column.nullable ? 'Y' : 'N',
-        getKeyType(column),
-        column.defaultValue,
-        column.comment
-      ]);
-    });
+  // 다운로드
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
   });
 
-  const allTablesSheet = XLSX.utils.aoa_to_sheet(allTablesData);
-  allTablesSheet['!cols'] = [
-    { wch: 20 }, // 테이블명
-    { wch: 20 }, // 컬럼명
-    { wch: 15 }, // 데이터타입
-    { wch: 10 }, // NULL 허용
-    { wch: 8 },  // 키
-    { wch: 15 }, // 기본값
-    { wch: 30 }  // 설명
-  ];
-
-  XLSX.utils.book_append_sheet(workbook, allTablesSheet, '전체통합');
-
-  // 파일 다운로드
-  XLSX.writeFile(workbook, filename);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }

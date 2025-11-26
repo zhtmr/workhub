@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { parseDDL, Table, DatabaseType, ParseResult } from "@/utils/ddlParser";
-import { exportToExcelWithMetadata } from "@/utils/excelExporter";
+import { exportToExcelWithTemplate } from "@/utils/excelExporter";
 import { useHistory } from "@/hooks/use-history";
 import { useAuth } from "@/providers/AuthProvider";
 import { FileSpreadsheet, Wand2, Database, Network, Bug, Save } from "lucide-react";
@@ -137,10 +137,10 @@ const DdlConverter = () => {
     setExportDialogOpen(true);
   };
 
-  const handleExport = (metadata: ExportMetadata) => {
+  const handleExport = async (metadata: ExportMetadata) => {
     try {
       const filename = `${metadata.systemName.replace(/[^a-zA-Z0-9가-힣]/g, '_')}_테이블정의서.xlsx`;
-      exportToExcelWithMetadata(parsedTables, metadata, filename);
+      await exportToExcelWithTemplate(parsedTables, metadata, filename);
       toast.success("테이블 정의서가 다운로드되었습니다.");
     } catch (error) {
       console.error("Export error:", error);
