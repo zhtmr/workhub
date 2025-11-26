@@ -1,0 +1,6 @@
+{
+  "enabledMcpjsonServers": [
+    "excel"
+  ],
+  "enableAllProjectMcpServers": true
+}
