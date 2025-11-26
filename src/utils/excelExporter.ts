@@ -13,47 +13,6 @@ function extractBaseType(dataType: string): string {
   return dataType.replace(/\(.*\)/, '').toLowerCase();
 }
 
-// 시트 복사 함수 (ExcelJS는 직접 시트 복사를 지원하지 않음)
-async function copyWorksheet(
-  sourceSheet: ExcelJS.Worksheet,
-  targetWorkbook: ExcelJS.Workbook,
-  newName: string
-): Promise<ExcelJS.Worksheet> {
-  const newSheet = targetWorkbook.addWorksheet(newName);
-
-  // 열 너비 복사
-  sourceSheet.columns.forEach((col, index) => {
-    if (col.width) {
-      newSheet.getColumn(index + 1).width = col.width;
-    }
-  });
-
-  // 행 높이 및 셀 데이터/스타일 복사
-  sourceSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-    const newRow = newSheet.getRow(rowNumber);
-    newRow.height = row.height;
-
-    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-      const newCell = newRow.getCell(colNumber);
-
-      // 값 복사 (수식 제외, 값만)
-      newCell.value = cell.value;
-
-      // 스타일 복사
-      if (cell.style) {
-        newCell.style = JSON.parse(JSON.stringify(cell.style));
-      }
-    });
-  });
-
-  // 병합된 셀 복사
-  sourceSheet.model.merges?.forEach((merge) => {
-    newSheet.mergeCells(merge);
-  });
-
-  return newSheet;
-}
-
 // 표지 시트 업데이트
 function updateCoverSheet(sheet: ExcelJS.Worksheet, metadata: ExportMetadata): void {
   // 시스템명 (A10 - 병합된 셀)
@@ -170,23 +129,100 @@ export async function exportToExcelWithTemplate(
       updateTableListSheet(tableListSheet, tables, metadata);
     }
 
-    // 6. 템플릿 테이블 시트 가져오기
+    // 6. 템플릿 테이블 시트 가져오기 및 복사용 데이터 저장
     const templateTableSheet = workbook.getWorksheet('user_notifications');
 
     // 7. 각 테이블별 시트 생성
     if (templateTableSheet) {
+      // 템플릿 시트 데이터를 임시 저장
+      const templateData: {
+        columns: { width?: number }[];
+        rows: { height?: number; cells: { value: ExcelJS.CellValue; style?: Partial<ExcelJS.Style> }[] }[];
+        merges: string[];
+      } = {
+        columns: [],
+        rows: [],
+        merges: []
+      };
+
+      // 열 너비 저장
+      if (templateTableSheet.columns) {
+        templateTableSheet.columns.forEach((col) => {
+          templateData.columns.push({ width: col?.width });
+        });
+      }
+
+      // 행/셀 데이터 저장
+      templateTableSheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+        const rowData: { height?: number; cells: { value: ExcelJS.CellValue; style?: Partial<ExcelJS.Style> }[] } = {
+          height: row.height,
+          cells: []
+        };
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+          // 배열 인덱스 맞추기
+          while (rowData.cells.length < colNumber - 1) {
+            rowData.cells.push({ value: null });
+          }
+          rowData.cells.push({
+            value: cell.value,
+            style: cell.style ? JSON.parse(JSON.stringify(cell.style)) : undefined
+          });
+        });
+        // 배열 인덱스 맞추기 (rowNumber - 1)
+        while (templateData.rows.length < rowNumber - 1) {
+          templateData.rows.push({ cells: [] });
+        }
+        templateData.rows.push(rowData);
+      });
+
+      // 병합 정보 저장
+      const merges = templateTableSheet.model?.merges;
+      if (merges && Array.isArray(merges)) {
+        templateData.merges = [...merges];
+      }
+
+      // 템플릿 시트 삭제 (먼저 삭제해야 같은 이름 시트 생성 가능)
+      workbook.removeWorksheet(templateTableSheet.id);
+
+      // 각 테이블별 시트 생성
       for (const table of tables) {
         const sheetName = table.name.replace(/[\\/*?[\]:]/g, '_').substring(0, 31);
+        const newSheet = workbook.addWorksheet(sheetName);
 
-        // 시트 복사
-        const newSheet = await copyWorksheet(workbook, workbook, sheetName);
+        // 열 너비 복원
+        templateData.columns.forEach((col, index) => {
+          if (col.width) {
+            newSheet.getColumn(index + 1).width = col.width;
+          }
+        });
+
+        // 행/셀 데이터 복원
+        templateData.rows.forEach((rowData, rowIndex) => {
+          const newRow = newSheet.getRow(rowIndex + 1);
+          if (rowData.height) {
+            newRow.height = rowData.height;
+          }
+          rowData.cells.forEach((cellData, colIndex) => {
+            const newCell = newRow.getCell(colIndex + 1);
+            newCell.value = cellData.value;
+            if (cellData.style) {
+              newCell.style = cellData.style;
+            }
+          });
+        });
+
+        // 병합 복원
+        templateData.merges.forEach((merge) => {
+          try {
+            newSheet.mergeCells(merge);
+          } catch {
+            // 병합 실패 시 무시
+          }
+        });
 
         // 데이터 업데이트
         updateTableSheet(newSheet, table, metadata);
       }
-
-      // 템플릿 시트 삭제
-      workbook.removeWorksheet(templateTableSheet.id);
     }
 
     // 8. 파일 다운로드
