@@ -1,6 +1,6 @@
 # WorkHub 남은 스프린트 구현 계획
 
-> 마지막 업데이트: 2024년 Sprint 1 완료 후
+> 마지막 업데이트: 2024년 Sprint 1.5 완료 후
 
 ## 프로젝트 현황
 
@@ -15,12 +15,12 @@
 | Sprint | 상태 | 내용 | 주요 산출물 |
 |--------|------|------|-------------|
 | Sprint 1 | ✅ 완료 | 인증/저장 시스템 | Supabase, OAuth, 다크모드, 히스토리 |
-| Sprint 1.5 | 🔜 다음 | DDL 엑셀 포맷 개선 | 표준 테이블 정의서 포맷, 메타데이터 입력 |
-| Sprint 2 | ⏳ 대기 | 문서 변환 도구 | MD↔PDF 변환, 실시간 미리보기 |
-| Sprint 3 | ⏳ 대기 | 데이터 분석 도구 | 데이터 테이블, 차트, 통계 |
-| Sprint 4 | ⏳ 대기 | JSON/정규식 도구 | JSON 뷰어, 정규식 테스터 |
-| Sprint 5 | ⏳ 대기 | 인코딩/Diff 도구 | Base64, URL, UUID, 해시, Diff |
-| Sprint 6 | ⏳ 대기 | UX 개선 | 단축키, 드래그앤드롭 |
+| Sprint 1.5 | ✅ 완료 | DDL 엑셀 포맷 개선 | ExcelJS 템플릿 기반, 서식 보존, 메타데이터 입력 |
+| Sprint 2 | ✅ 완료 | Markdown 에디터 | 에디터/미리보기, GFM, 코드 하이라이팅 |
+| Sprint 3 | ✅ 완료 | 데이터 분석 도구 | 데이터 테이블, 차트(4종), 통계, 피벗 |
+| Sprint 4 | ✅ 완료 | JSON/정규식 도구 | JSON 뷰어, 정규식 테스터, TS 인터페이스 생성 |
+| Sprint 5 | ✅ 완료 | 인코딩/Diff 도구 | Base64, URL, UUID, 해시, Diff 비교 |
+| Sprint 6 | ✅ 완료 | UX 개선 | 단축키, 드래그앤드롭, 명령 팔레트, 온보딩 |
 
 ---
 
@@ -144,205 +144,230 @@ src/
 
 ---
 
-## Sprint 2: 문서 변환 도구
+## Sprint 2: Markdown 에디터 (완료)
 
-### 기능 범위
+### 구현된 기능
 
-| 기능 | 설명 |
-|------|------|
-| Markdown → PDF | MD 파일을 PDF로 변환 |
-| Markdown Preview | 실시간 미리보기 |
-| PDF → Markdown | PDF 텍스트 추출 (기본) |
-| 템플릿 시스템 | 문서 템플릿 제공 |
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| Markdown Editor | 툴바 + textarea 에디터 | ✅ |
+| Markdown Preview | 실시간 미리보기 (GFM) | ✅ |
+| 코드 하이라이팅 | highlight.js 연동 | ✅ |
+| 파일 업로드 | 드래그앤드롭 .md 파일 | ✅ |
+| 복사/다운로드 | 클립보드 복사, .md 다운로드 | ✅ |
 
-### 필요 패키지
+> PDF 변환은 추후 구현 예정
+
+### 사용 패키지
 
 ```bash
-npm install @react-pdf/renderer react-markdown remark-gfm rehype-highlight
+npm install react-markdown remark-gfm rehype-highlight highlight.js
 ```
 
-### 파일 구조
+### 구현된 파일
 
 ```
 src/
 ├── components/
 │   └── document/
-│       ├── MarkdownEditor.tsx     # 마크다운 에디터 (툴바 + textarea)
-│       ├── MarkdownPreview.tsx    # 실시간 미리보기
-│       ├── PdfPreview.tsx         # PDF 미리보기
-│       └── DocumentUploader.tsx   # 파일 업로드
-├── utils/
-│   ├── markdownToPdf.ts          # MD → PDF 변환 유틸
-│   └── pdfToMarkdown.ts          # PDF → MD 변환 유틸
+│       ├── MarkdownToolbar.tsx    # 포맷팅 툴바 (볼드, 헤딩, 리스트 등)
+│       ├── MarkdownEditor.tsx     # 에디터 (툴바 + textarea + 드래그앤드롭)
+│       └── MarkdownPreview.tsx    # 실시간 미리보기 (GFM, 코드 하이라이팅)
 └── pages/
-    └── DocumentConverter.tsx      # 통합 페이지
+    └── DocumentConverter.tsx      # 통합 페이지 (좌우 분할 레이아웃)
 ```
 
-### 구현 순서
+### 주요 기능
 
-1. MarkdownEditor 컴포넌트 (툴바 + textarea)
-2. MarkdownPreview (react-markdown + GFM 지원)
-3. markdownToPdf 변환 유틸리티
-4. PdfPreview 컴포넌트
-5. DocumentConverter 페이지 통합
-6. 사이드바 메뉴 추가
-7. 히스토리 저장 연동 (선택)
+- **MarkdownToolbar**: 볼드, 이탤릭, 취소선, 헤딩(H1-H3), 목록, 인용, 코드, 링크, 이미지, 테이블, 구분선
+- **MarkdownEditor**: 커서 위치 기반 텍스트 삽입, .md 파일 드래그앤드롭
+- **MarkdownPreview**: react-markdown + GFM + rehype-highlight, 테이블/코드블록/체크리스트 스타일링
 
 ---
 
-## Sprint 3: 데이터 분석 도구
+## Sprint 3: 데이터 분석 도구 (완료)
 
-### 기능 범위
+### 구현된 기능
 
-| 기능 | 설명 |
-|------|------|
-| CSV/Excel 업로드 | 파일 파싱 및 데이터 추출 |
-| 데이터 테이블 | 정렬/필터/페이지네이션 |
-| 기본 통계 | 합계, 평균, 최대/최소, 표준편차 |
-| 차트 시각화 | 막대, 라인, 파이, 스캐터 |
-| 피벗 테이블 | 그룹핑 및 집계 |
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| CSV/Excel 업로드 | 드래그앤드롭, papaparse/xlsx | ✅ |
+| 데이터 테이블 | 정렬/필터/페이지네이션 | ✅ |
+| 기본 통계 | 개수, 합계, 평균, 최소, 최대, 표준편차, 중앙값 | ✅ |
+| 차트 시각화 | 막대, 라인, 파이, 스캐터 (4종) | ✅ |
+| 피벗 테이블 | 행/열/값 필드 선택, 집계 (Sum/Count/Avg/Min/Max) | ✅ |
 
-### 활용 가능한 기존 패키지
-
-- `xlsx` - Excel/CSV 파싱 (이미 설치됨)
-- `recharts` - 차트 (이미 설치됨)
-- `@tanstack/react-table` - 데이터 테이블 (이미 설치됨)
-
-### 추가 패키지
+### 사용 패키지
 
 ```bash
 npm install papaparse simple-statistics
 ```
 
-### 파일 구조
+### 구현된 파일
 
 ```
 src/
 ├── components/
 │   └── analysis/
-│       ├── DataUploader.tsx      # 파일 업로드
-│       ├── DataTable.tsx         # 데이터 테이블 (정렬/필터)
-│       ├── DataStats.tsx         # 통계 카드
+│       ├── DataUploader.tsx      # 드래그앤드롭 파일 업로드
+│       ├── DataTable.tsx         # 정렬/필터/페이지네이션 테이블
+│       ├── DataStats.tsx         # 통계 카드 (6개 지표)
 │       ├── ChartBuilder.tsx      # 차트 설정 UI
-│       ├── ChartPreview.tsx      # 차트 미리보기
-│       └── PivotTable.tsx        # 피벗 테이블
+│       ├── ChartPreview.tsx      # recharts 기반 차트
+│       └── PivotTable.tsx        # 피벗 테이블 (행/열/값 집계)
 ├── utils/
-│   ├── dataParser.ts             # CSV/Excel 파싱
-│   ├── statistics.ts             # 통계 계산
-│   └── chartConfig.ts            # 차트 설정
-├── hooks/
-│   └── use-data-analysis.ts      # 분석 상태 관리
+│   ├── dataParser.ts             # CSV/Excel 통합 파싱
+│   └── statistics.ts             # 통계 계산 (simple-statistics)
 └── pages/
-    └── DataAnalysis.tsx          # 통합 페이지
+    └── DataAnalysis.tsx          # 탭 기반 통합 페이지
 ```
 
-### 구현 순서
+### 주요 기능
 
-1. DataUploader 컴포넌트
-2. dataParser.ts (CSV/Excel 통합 파싱)
-3. DataTable 컴포넌트 (정렬/필터)
-4. statistics.ts 통계 유틸
-5. DataStats 통계 카드 UI
-6. ChartBuilder 차트 설정 UI
-7. ChartPreview (recharts 활용)
-8. DataAnalysis 페이지 통합
+- **DataUploader**: CSV/Excel 드래그앤드롭, 파일 타입 자동 감지
+- **DataTable**: 컬럼 정렬, 텍스트 필터, 페이지네이션 (10/25/50/100)
+- **DataStats**: 숫자형 컬럼 자동 감지, 6개 통계 카드 + 추가 통계
+- **ChartBuilder/Preview**: 4가지 차트 타입, X/Y축 선택, recharts 렌더링
+- **PivotTable**: 행/열/값 필드 선택, 5가지 집계 함수, 행/열 합계
 
 ---
 
-## Sprint 4: JSON/정규식 도구
+## Sprint 4: JSON/정규식 도구 (완료)
 
-### 4.1 JSON 뷰어/편집기
+### 구현된 기능
 
-| 기능 | 설명 |
-|------|------|
-| JSON 포맷팅/검증 | 문법 오류 표시, 자동 포맷 |
-| 트리 뷰 + 코드 뷰 | 계층 구조 탐색/원본 코드 |
-| TS 인터페이스 생성 | JSON → TypeScript 타입 변환 |
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| JSON 편집기 | 라인 번호, 문법 오류 표시, 포맷/압축 | ✅ |
+| JSON 트리 뷰 | 접기/펼치기, 타입별 색상, 복사 | ✅ |
+| TS 인터페이스 생성 | JSON → TypeScript 타입 자동 변환 | ✅ |
+| 정규식 테스터 | 패턴 입력, 플래그 옵션 (g,i,m,s,u) | ✅ |
+| 실시간 하이라이팅 | 매칭 텍스트 색상 구분 | ✅ |
+| 캡처 그룹 표시 | 그룹별 매칭 결과 및 위치 | ✅ |
 
-**파일 구조:**
+### 구현된 파일
+
 ```
-src/components/json/
-├── JsonEditor.tsx           # JSON 편집기
-├── JsonTreeView.tsx         # 트리 뷰
-└── TypeScriptGenerator.tsx  # TS 인터페이스 생성
-src/pages/JsonViewer.tsx
+src/
+├── components/
+│   ├── json/
+│   │   ├── JsonEditor.tsx           # JSON 편집기 (라인 번호, 에러 표시)
+│   │   ├── JsonTreeView.tsx         # 재귀적 트리 뷰
+│   │   └── TypeScriptGenerator.tsx  # TS 인터페이스 생성기
+│   └── regex/
+│       ├── RegexInput.tsx           # 패턴 + 플래그 입력
+│       ├── TestTextArea.tsx         # 하이라이트 텍스트 영역
+│       └── MatchResults.tsx         # 매칭 결과 목록
+├── utils/
+│   ├── jsonUtils.ts                 # JSON 파싱/포맷팅/검증
+│   └── tsGenerator.ts               # JSON → TypeScript 변환
+└── pages/
+    ├── JsonViewer.tsx               # 탭 기반 JSON 도구
+    └── RegexTester.tsx              # 정규식 테스터 페이지
 ```
 
-### 4.2 정규식 테스터
+### 주요 기능
 
-| 기능 | 설명 |
-|------|------|
-| 실시간 매칭 | 입력 텍스트에서 하이라이트 |
-| 캡처 그룹 표시 | 그룹별 매칭 결과 |
-| 패턴 저장 | 자주 쓰는 정규식 저장 |
-| 플래그 옵션 | g, i, m, s 등 |
-
-**파일 구조:**
-```
-src/components/regex/
-├── RegexInput.tsx           # 정규식 입력
-├── TestTextArea.tsx         # 테스트 텍스트
-└── MatchResults.tsx         # 매칭 결과
-src/pages/RegexTester.tsx
-```
+- **JsonEditor**: 라인 번호 표시, 에러 위치 표시, 포맷/압축/복사 버튼
+- **JsonTreeView**: 객체/배열 접기/펼치기, 타입별 색상 (문자열=녹색, 숫자=파랑 등)
+- **TypeScriptGenerator**: 중첩 인터페이스 생성, 배열 타입 추론, 복사 기능
+- **RegexInput**: 슬래시 형식 표시, 5가지 플래그 (g, i, m, s, u)
+- **TestTextArea**: 실시간 매칭 하이라이팅, 색상 순환
+- **MatchResults**: 매칭 번호, 위치, 캡처 그룹 상세 표시
 
 ---
 
-## Sprint 5: 인코딩/Diff 도구
+## Sprint 5: 인코딩/Diff 도구 (완료)
 
-### 5.1 인코딩 도구
+### 구현된 기능
 
-| 기능 | 설명 |
-|------|------|
-| Base64 | 인코드/디코드 (텍스트, 이미지) |
-| URL 인코딩 | encodeURIComponent |
-| UUID 생성 | v4 랜덤 UUID |
-| 해시 생성 | MD5, SHA-1, SHA-256 |
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| Base64 인코딩 | 텍스트/파일 인코드/디코드, 파일 다운로드 | ✅ |
+| URL 인코딩 | encodeURIComponent 기반 인코드/디코드 | ✅ |
+| UUID 생성 | v4 랜덤 UUID, 다중 생성, 복사 | ✅ |
+| 해시 생성 | MD5, SHA-1, SHA-256, SHA-384, SHA-512 | ✅ |
+| Diff 비교 | 좌우 비교/인라인 뷰, 라인 번호, 추가/삭제 표시 | ✅ |
 
-**파일 구조:**
-```
-src/components/encoding/
-├── Base64Tool.tsx
-├── UrlEncoder.tsx
-├── UuidGenerator.tsx
-└── HashGenerator.tsx
-src/pages/EncodingTools.tsx
-```
+### 사용 패키지
 
-### 5.2 Diff 비교 도구
-
-| 기능 | 설명 |
-|------|------|
-| 텍스트/코드 비교 | 두 입력 간 차이점 |
-| 사이드바이사이드 | 좌우 비교 뷰 |
-| 인라인 뷰 | 단일 뷰 변경점 표시 |
-| 변경점 네비게이션 | 이전/다음 변경점 이동 |
-
-**필요 패키지:**
 ```bash
 npm install diff
 ```
 
-**파일 구조:**
+### 구현된 파일
+
 ```
-src/components/diff/
-├── DiffEditor.tsx
-├── DiffViewer.tsx
-└── DiffNavigation.tsx
-src/pages/DiffTool.tsx
+src/
+├── components/
+│   ├── encoding/
+│   │   ├── Base64Tool.tsx       # 텍스트/파일 Base64 변환
+│   │   ├── UrlEncoder.tsx       # URL 인코딩/디코딩
+│   │   ├── UuidGenerator.tsx    # UUID v4 생성 (다중)
+│   │   └── HashGenerator.tsx    # MD5, SHA-1/256/384/512
+│   └── diff/
+│       ├── DiffEditor.tsx       # 라인 번호 에디터
+│       └── DiffViewer.tsx       # 좌우/인라인 비교 뷰
+├── utils/
+│   └── encodingUtils.ts         # 인코딩/해시 유틸리티
+└── pages/
+    ├── EncodingTools.tsx        # 탭 기반 인코딩 도구
+    └── DiffTool.tsx             # Diff 비교 페이지
 ```
+
+### 주요 기능
+
+- **Base64Tool**: 텍스트/파일 변환, 파일 업로드/다운로드, 좌우 교체
+- **UrlEncoder**: URL 인코딩/디코딩, 예시 표시
+- **UuidGenerator**: 1-100개 UUID 생성, 개별/전체 복사, UUID v4 정보
+- **HashGenerator**: 5가지 해시 알고리즘, 비트 길이 표시, 개별/전체 복사
+- **DiffViewer**: 좌우 비교(side-by-side)/인라인 뷰, 라인 번호, 추가/삭제 통계
 
 ---
 
-## Sprint 6: UX 개선
+## Sprint 6: UX 개선 (완료)
 
-| 항목 | 설명 | 우선순위 |
-|------|------|----------|
-| 키보드 단축키 | Ctrl+S 저장, Ctrl+Enter 실행 | 높음 |
-| 전역 드래그앤드롭 | 어디서든 파일 업로드 | 높음 |
-| 최근 작업 | 사이드바에 최근 사용 기능 | 중간 |
-| 실행 취소/재실행 | 편집기 히스토리 | 중간 |
-| 온보딩 튜토리얼 | 첫 방문자 가이드 | 낮음 |
+### 구현된 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 키보드 단축키 | Ctrl+K 명령팔레트, Ctrl+/ 사이드바, Ctrl+1 대시보드 등 | ✅ |
+| 명령 팔레트 | 빠른 페이지 이동, 테마 변경, 단축키 보기 | ✅ |
+| 전역 드래그앤드롭 | 파일 드롭 시 해당 도구로 자동 이동 | ✅ |
+| 실행 취소/재실행 | Ctrl+Z/Y 기반 히스토리 관리 훅 | ✅ |
+| 최근 작업 | 로컬 스토리지 기반 최근 작업 추적 | ✅ |
+| 온보딩 투어 | 첫 방문자 가이드, 설정에서 재시작 가능 | ✅ |
+
+### 구현된 파일
+
+```
+src/
+├── hooks/
+│   ├── use-keyboard-shortcuts.ts  # 전역 키보드 단축키 훅
+│   ├── use-recent-work.ts         # 최근 작업 추적 훅
+│   └── use-undo-redo.ts           # 실행 취소/재실행 훅
+├── components/
+│   ├── common/
+│   │   ├── CommandPalette.tsx     # 명령 팔레트 (Ctrl+K)
+│   │   ├── GlobalDropzone.tsx     # 전역 드래그앤드롭
+│   │   └── OnboardingTour.tsx     # 온보딩 투어
+│   └── layout/
+│       └── Layout.tsx             # UX 기능 통합
+└── pages/
+    └── Settings.tsx               # UX 설정 추가
+```
+
+### 주요 단축키
+
+| 단축키 | 기능 |
+|--------|------|
+| Ctrl+K | 명령 팔레트 열기 |
+| Ctrl+/ | 사이드바 토글 |
+| Ctrl+1 | 대시보드로 이동 |
+| Ctrl+, | 설정으로 이동 |
+| Ctrl+Z | 실행 취소 |
+| Ctrl+Shift+Z | 다시 실행 |
+| ? | 단축키 도움말 |
 
 ---
 

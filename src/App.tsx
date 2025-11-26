@@ -8,6 +8,12 @@ import { AuthProvider } from "@/providers/AuthProvider";
 import { Layout } from "./components/layout/Layout";
 import Dashboard from "./pages/Dashboard";
 import DdlConverter from "./pages/DdlConverter";
+import DocumentConverter from "./pages/DocumentConverter";
+import DataAnalysis from "./pages/DataAnalysis";
+import JsonViewer from "./pages/JsonViewer";
+import RegexTester from "./pages/RegexTester";
+import EncodingTools from "./pages/EncodingTools";
+import DiffTool from "./pages/DiffTool";
 import Settings from "./pages/Settings";
 import History from "./pages/History";
 import Auth from "./pages/Auth";
@@ -28,6 +34,12 @@ const App = () => (
               <Route element={<Layout />}>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/ddl-converter" element={<DdlConverter />} />
+                <Route path="/document-converter" element={<DocumentConverter />} />
+                <Route path="/data-analysis" element={<DataAnalysis />} />
+                <Route path="/json-viewer" element={<JsonViewer />} />
+                <Route path="/regex-tester" element={<RegexTester />} />
+                <Route path="/encoding-tools" element={<EncodingTools />} />
+                <Route path="/diff-tool" element={<DiffTool />} />
                 <Route path="/history" element={<History />} />
                 <Route path="/settings" element={<Settings />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

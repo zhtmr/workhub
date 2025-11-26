@@ -6,7 +6,11 @@ import {
   FileText,
   Calculator,
   BarChart3,
-  History
+  History,
+  Braces,
+  Regex,
+  Binary,
+  GitCompare
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -32,9 +36,13 @@ const mainItems = [
 
 const toolsItems = [
   { title: "엑셀 도구", url: "/excel-tools", icon: FileSpreadsheet, disabled: true },
-  { title: "문서 변환", url: "/document-converter", icon: FileText, disabled: true },
+  { title: "문서 변환", url: "/document-converter", icon: FileText, disabled: false },
+  { title: "데이터 분석", url: "/data-analysis", icon: BarChart3, disabled: false },
+  { title: "JSON 뷰어", url: "/json-viewer", icon: Braces, disabled: false },
+  { title: "정규식 테스터", url: "/regex-tester", icon: Regex, disabled: false },
+  { title: "인코딩 도구", url: "/encoding-tools", icon: Binary, disabled: false },
+  { title: "Diff 비교", url: "/diff-tool", icon: GitCompare, disabled: false },
   { title: "계산기", url: "/calculator", icon: Calculator, disabled: true },
-  { title: "데이터 분석", url: "/data-analysis", icon: BarChart3, disabled: true },
 ];
 
 const settingsItems = [
@@ -81,16 +89,28 @@ export function AppSidebar() {
             <SidebarMenu>
               {toolsItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton 
-                    disabled={item.disabled}
-                    className="flex items-center gap-3"
-                  >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.title}</span>
-                    {item.disabled && open && (
-                      <span className="ml-auto text-xs text-muted-foreground">예정</span>
-                    )}
-                  </SidebarMenuButton>
+                  {item.disabled ? (
+                    <SidebarMenuButton
+                      disabled
+                      className="flex items-center gap-3"
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {open && (
+                        <span className="ml-auto text-xs text-muted-foreground">예정</span>
+                      )}
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink
+                        to={item.url}
+                        className="flex items-center gap-3"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  )}
                 </SidebarMenuItem>
               ))}
             </SidebarMenu>
