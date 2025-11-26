@@ -6,15 +6,54 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { parseDDL, Table, DatabaseType } from "@/utils/ddlParser";
+import { formatAndSortDDL, cleanupDDLText } from "@/utils/ddlFormatter";
 import { exportToExcel } from "@/utils/excelExporter";
-import { FileSpreadsheet, Wand2, Database, Network } from "lucide-react";
+import { FileSpreadsheet, Wand2, Database, Network, ArrowDownUp } from "lucide-react";
 import { toast } from "sonner";
 
 const DdlConverter = () => {
   const [ddlText, setDdlText] = useState("");
   const [parsedTables, setParsedTables] = useState<Table[]>([]);
   const [dbType, setDbType] = useState<DatabaseType>('auto');
+  const [autoSort, setAutoSort] = useState(true);
+  const [isFormatted, setIsFormatted] = useState(false);
+
+  const handleDDLChange = (newDdl: string) => {
+    setDdlText(newDdl);
+    setIsFormatted(false);
+  };
+
+  const handleAutoFormat = () => {
+    if (!ddlText.trim()) {
+      toast.error("DDL을 입력해주세요.");
+      return;
+    }
+
+    try {
+      // 먼저 파싱
+      const tables = parseDDL(ddlText, dbType);
+      if (tables.length === 0) {
+        toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
+        return;
+      }
+
+      // 정렬 및 포맷팅
+      const detectedDbType = dbType === 'auto' ? 'postgresql' : dbType;
+      const formatted = formatAndSortDDL(tables, detectedDbType);
+      const cleaned = cleanupDDLText(formatted);
+      
+      setDdlText(cleaned);
+      setIsFormatted(true);
+      toast.success("DDL이 정렬 및 포맷팅되었습니다.", {
+        description: `${tables.length}개 테이블이 의존성 순서로 정렬되었습니다.`
+      });
+    } catch (error) {
+      console.error("Formatting error:", error);
+      toast.error("DDL 포맷팅 중 오류가 발생했습니다.");
+    }
+  };
 
   const handleParse = () => {
     if (!ddlText.trim()) {
@@ -23,7 +62,22 @@ const DdlConverter = () => {
     }
 
     try {
-      const tables = parseDDL(ddlText, dbType);
+      // autoSort가 켜져 있고 아직 포맷팅 안 됐으면 먼저 포맷팅
+      let textToParse = ddlText;
+      
+      if (autoSort && !isFormatted) {
+        const tables = parseDDL(ddlText, dbType);
+        if (tables.length > 0) {
+          const detectedDbType = dbType === 'auto' ? 'postgresql' : dbType;
+          const formatted = formatAndSortDDL(tables, detectedDbType);
+          textToParse = cleanupDDLText(formatted);
+          setDdlText(textToParse);
+          setIsFormatted(true);
+          toast.info("DDL을 자동으로 정렬했습니다.");
+        }
+      }
+
+      const tables = parseDDL(textToParse, dbType);
       if (tables.length === 0) {
         toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
         return;
@@ -108,6 +162,7 @@ CREATE TABLE comments (
   const loadSample = (type: 'mysql' | 'postgresql' = 'mysql') => {
     setDdlText(type === 'mysql' ? sampleDDL : samplePostgreSQL);
     setDbType(type);
+    setIsFormatted(false);
     toast.info(`${type.toUpperCase()} 샘플 DDL을 불러왔습니다.`);
   };
 
@@ -132,42 +187,65 @@ CREATE TABLE comments (
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Left Panel - Input */}
         <div className="space-y-4">
-          <DDLUploader onDDLChange={setDdlText} ddlText={ddlText} />
+          <DDLUploader onDDLChange={handleDDLChange} ddlText={ddlText} />
           
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>데이터베이스 타입</Label>
-              <Select value={dbType} onValueChange={(value) => setDbType(value as DatabaseType)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="데이터베이스 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">자동 감지</SelectItem>
-                  <SelectItem value="mysql">MySQL</SelectItem>
-                  <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>데이터베이스 타입</Label>
+                <Select value={dbType} onValueChange={(value) => setDbType(value as DatabaseType)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="데이터베이스 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">자동 감지</SelectItem>
+                    <SelectItem value="mysql">MySQL</SelectItem>
+                    <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>자동 정렬</Label>
+                <div className="flex items-center h-10 px-3 border rounded-md bg-background">
+                  <Switch 
+                    checked={autoSort} 
+                    onCheckedChange={setAutoSort}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">{autoSort ? '활성화' : '비활성화'}</span>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-2">
+              <Button 
+                onClick={handleAutoFormat} 
+                variant="outline"
+                className="flex-1"
+              >
+                <ArrowDownUp className="w-4 h-4 mr-2" />
+                DDL 정렬
+              </Button>
               <Button 
                 onClick={handleParse} 
                 className="flex-1"
                 size="lg"
               >
                 <Wand2 className="w-4 h-4 mr-2" />
-                DDL 변환
+                변환
               </Button>
-              <Select onValueChange={(value) => loadSample(value as 'mysql' | 'postgresql')}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="샘플 로드" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="mysql">MySQL 샘플</SelectItem>
-                  <SelectItem value="postgresql">PostgreSQL 샘플</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
+
+            <Select onValueChange={(value) => loadSample(value as 'mysql' | 'postgresql')}>
+              <SelectTrigger>
+                <SelectValue placeholder="샘플 로드" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="mysql">MySQL 샘플</SelectItem>
+                <SelectItem value="postgresql">PostgreSQL 샘플</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
