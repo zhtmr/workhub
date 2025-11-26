@@ -37,29 +37,63 @@ export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto'): Table[
     dbType = detectDatabaseType(ddlText);
   }
   
-  // CREATE TABLE 문들을 찾기 (MySQL, PostgreSQL 지원)
-  // PostgreSQL의 경우 스키마명도 고려
-  const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(\w+)\.)?(\w+)\s*\(([\s\S]*?)\)(?:\s*(?:COMMENT\s*=?\s*['"]([^'"]*?)['"]|;))?/gi;
+  // CREATE TABLE 문 찾기 - 수동으로 괄호 매칭하여 정확히 추출
+  const createTablePattern = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(\w+)\.)?(\w+)\s*\(/gi;
   
   let match;
-  while ((match = createTableRegex.exec(ddlText)) !== null) {
+  while ((match = createTablePattern.exec(ddlText)) !== null) {
     const schema = match[1];
     const tableName = match[2];
-    const columnsText = match[3];
-    const inlineTableComment = match[4] || '';
+    const startPos = match.index + match[0].length; // '(' 다음 위치
     
-    const { columns, primaryKeys, foreignKeys } = parseColumns(columnsText, dbType);
+    // 괄호 depth를 세면서 CREATE TABLE의 끝을 찾기
+    let depth = 1;
+    let endPos = startPos;
+    let inString = false;
+    let stringChar = '';
     
-    // 테이블 이름 (스키마명 제거)
-    const fullTableName = schema ? `${schema}.${tableName}` : tableName;
+    while (endPos < ddlText.length && depth > 0) {
+      const char = ddlText[endPos];
+      const prevChar = endPos > 0 ? ddlText[endPos - 1] : '';
+      
+      // 문자열 처리 (이스케이프된 따옴표 무시)
+      if (!inString && (char === "'" || char === '"') && prevChar !== '\\') {
+        inString = true;
+        stringChar = char;
+      } else if (inString && char === stringChar && prevChar !== '\\') {
+        inString = false;
+      }
+      
+      // 괄호 카운트 (문자열 밖에서만)
+      if (!inString) {
+        if (char === '(') {
+          depth++;
+        } else if (char === ')') {
+          depth--;
+        }
+      }
+      
+      endPos++;
+    }
     
-    tables.push({
-      name: tableName, // 스키마명 제거한 순수 테이블명
-      comment: inlineTableComment,
-      columns,
-      primaryKeys,
-      foreignKeys
-    });
+    if (depth === 0) {
+      const columnsText = ddlText.substring(startPos, endPos - 1); // 마지막 ')' 제외
+      
+      // 인라인 테이블 코멘트 찾기 (MySQL 스타일)
+      const remainingText = ddlText.substring(endPos, endPos + 200);
+      const inlineCommentMatch = remainingText.match(/^\s*COMMENT\s*=?\s*['"]([^'"]*?)['"]/i);
+      const inlineTableComment = inlineCommentMatch ? inlineCommentMatch[1] : '';
+      
+      const { columns, primaryKeys, foreignKeys } = parseColumns(columnsText, dbType);
+      
+      tables.push({
+        name: tableName, // 스키마명 제거한 순수 테이블명
+        comment: inlineTableComment,
+        columns,
+        primaryKeys,
+        foreignKeys
+      });
+    }
   }
   
   // COMMENT ON TABLE/COLUMN 파싱 (DataGrip PostgreSQL 스타일)
