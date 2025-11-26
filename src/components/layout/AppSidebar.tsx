@@ -10,7 +10,11 @@ import {
   Braces,
   Regex,
   Binary,
-  GitCompare
+  GitCompare,
+  Rocket,
+  KeyRound,
+  ClipboardCheck,
+  GitBranch,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -43,6 +47,14 @@ const toolsItems = [
   { title: "인코딩 도구", url: "/encoding-tools", icon: Binary, disabled: false },
   { title: "Diff 비교", url: "/diff-tool", icon: GitCompare, disabled: false },
   { title: "계산기", url: "/calculator", icon: Calculator, disabled: true },
+];
+
+const devOpsItems = [
+  { title: "배포 현황", url: "/deployment-dashboard", icon: Rocket, disabled: false },
+  { title: "MyBatis 테스터", url: "/mybatis-tester", icon: Database, disabled: true },
+  { title: "환경변수 관리", url: "/env-manager", icon: KeyRound, disabled: true },
+  { title: "코드 리뷰 헬퍼", url: "/code-review", icon: ClipboardCheck, disabled: true },
+  { title: "API 영향도 분석", url: "/api-impact", icon: GitBranch, disabled: true },
 ];
 
 const settingsItems = [
@@ -88,6 +100,41 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {toolsItems.map((item) => (
+                <SidebarMenuItem key={item.title}>
+                  {item.disabled ? (
+                    <SidebarMenuButton
+                      disabled
+                      className="flex items-center gap-3"
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.title}</span>
+                      {open && (
+                        <span className="ml-auto text-xs text-muted-foreground">예정</span>
+                      )}
+                    </SidebarMenuButton>
+                  ) : (
+                    <SidebarMenuButton asChild isActive={isActive(item.url)}>
+                      <NavLink
+                        to={item.url}
+                        className="flex items-center gap-3"
+                      >
+                        <item.icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  )}
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* DevOps 도구 */}
+        <SidebarGroup>
+          <SidebarGroupLabel>DevOps 도구</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {devOpsItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   {item.disabled ? (
                     <SidebarMenuButton

@@ -1,6 +1,6 @@
 # WorkHub 남은 스프린트 구현 계획
 
-> 마지막 업데이트: 2024년 Sprint 1.5 완료 후
+> 마지막 업데이트: 2025-11-27 Sprint 7 완료
 
 ## 프로젝트 현황
 
@@ -21,6 +21,11 @@
 | Sprint 4 | ✅ 완료 | JSON/정규식 도구 | JSON 뷰어, 정규식 테스터, TS 인터페이스 생성 |
 | Sprint 5 | ✅ 완료 | 인코딩/Diff 도구 | Base64, URL, UUID, 해시, Diff 비교 |
 | Sprint 6 | ✅ 완료 | UX 개선 | 단축키, 드래그앤드롭, 명령 팔레트, 온보딩 |
+| Sprint 7 | ✅ 완료 | 팀 인프라 + 배포 대시보드 | 팀/조직, GitLab CI/CD, 대시보드 MVP |
+| Sprint 8 | 🔜 예정 | 배포 완성 + MyBatis 기초 | Webhook, Docker, XML 파서 |
+| Sprint 9 | 🔜 예정 | MyBatis 완성 + 환경변수 | 쿼리 실행, EXPLAIN, 환경변수 CRUD |
+| Sprint 10 | 🔜 예정 | 환경변수 완성 + 코드 리뷰 | 감사 로그, Spring Boot 체크리스트 |
+| Sprint 11 | 🔜 예정 | 코드 리뷰 완성 + API 영향도 | 통계, OpenAPI, 영향도 그래프 |
 
 ---
 
@@ -387,12 +392,555 @@ src/
 
 ---
 
-## 향후 확장 (Phase 5)
+## Sprint 7: 팀 인프라 + 배포 대시보드 기초 (완료)
 
-### 팀 협업 기능
+### 목표
 
-- 읽기 전용 공유 링크 생성
-- 만료 시간 설정
-- 조회 수 추적
-- 조직/팀 생성
-- 멤버 초대 및 권한 관리
+팀/조직 구조 구축 및 배포 대시보드 MVP
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 팀/조직 관리 | 팀 생성, 멤버 초대, 역할 관리 | ✅ |
+| 프로젝트 등록 | GitLab URL, API 토큰, Prometheus 엔드포인트 | ✅ |
+| GitLab API 연동 | 파이프라인 상태 조회 | ✅ |
+| 배포 대시보드 UI | 프로젝트별 상태 카드, 타임라인 | ✅ |
+
+### 구현된 파일
+
+```
+sql/
+├── 001_sprint7_teams_deployment.sql  # DB 스키마
+└── 003_fix_all_rls.sql               # RLS 정책 (무한재귀 수정)
+
+src/
+├── types/
+│   └── deployment.ts                 # 타입 정의
+├── hooks/
+│   ├── use-teams.ts                  # 팀 CRUD 훅
+│   └── use-deployment-projects.ts    # 프로젝트/파이프라인 훅
+├── utils/
+│   └── gitlabApi.ts                  # GitLab API 클라이언트
+├── components/
+│   └── deployment/
+│       ├── index.ts
+│       ├── PipelineStatusBadge.tsx
+│       ├── DeploymentStats.tsx
+│       ├── ProjectCard.tsx
+│       ├── PipelineTimeline.tsx
+│       └── ProjectRegistrationDialog.tsx
+├── pages/
+│   └── DeploymentDashboard.tsx
+└── components/layout/
+    └── AppSidebar.tsx                # DevOps 메뉴 추가
+```
+
+### Database Schema
+
+```sql
+-- 팀 테이블
+CREATE TABLE teams (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  owner_id UUID NOT NULL REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 팀 멤버
+CREATE TABLE team_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id),
+  role VARCHAR(20) DEFAULT 'member', -- 'owner', 'admin', 'member'
+  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(team_id, user_id)
+);
+
+-- 배포 프로젝트
+CREATE TABLE deployment_projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  gitlab_url VARCHAR(500),
+  gitlab_project_id VARCHAR(50),
+  gitlab_api_token_encrypted TEXT,
+  prometheus_endpoint VARCHAR(500),
+  docker_host VARCHAR(500),
+  webhook_secret VARCHAR(100) DEFAULT gen_random_uuid()::text,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 파이프라인 이벤트
+CREATE TABLE pipeline_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES deployment_projects(id) ON DELETE CASCADE,
+  pipeline_id VARCHAR(50) NOT NULL,
+  ref VARCHAR(200),
+  status VARCHAR(50), -- 'pending', 'running', 'success', 'failed'
+  commit_sha VARCHAR(40),
+  commit_message TEXT,
+  author_name VARCHAR(100),
+  started_at TIMESTAMPTZ,
+  finished_at TIMESTAMPTZ,
+  duration_seconds INTEGER,
+  stages JSONB,
+  received_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 파일 구조
+
+```
+src/
+├── pages/
+│   └── DeploymentDashboard.tsx
+├── components/
+│   └── deployment/
+│       ├── ProjectRegistrationDialog.tsx
+│       ├── ProjectCard.tsx
+│       ├── PipelineTimeline.tsx
+│       ├── PipelineStatusBadge.tsx
+│       └── DeploymentStats.tsx
+├── hooks/
+│   ├── use-teams.ts
+│   └── use-deployment-projects.ts
+├── utils/
+│   └── gitlabApi.ts
+└── types/
+    └── deployment.ts
+```
+
+---
+
+## Sprint 8: 배포 대시보드 완성 + MyBatis 기초
+
+### 목표
+
+Webhook 수신, Prometheus/Docker 연동, MyBatis 파서 구현
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| GitLab Webhook | Edge Function으로 파이프라인 이벤트 수신 | 🔜 |
+| Prometheus 연동 | 메트릭 조회, 차트 시각화 | 🔜 |
+| Docker 상태 | 컨테이너 헬스체크 모니터링 | 🔜 |
+| MyBatis XML 파서 | select/insert/update/delete 구문 파싱 | 🔜 |
+| DB 연결 관리 | 연결 정보 암호화 저장 | 🔜 |
+
+### 추가 Database Schema
+
+```sql
+-- 컨테이너 스냅샷
+CREATE TABLE container_snapshots (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id UUID NOT NULL REFERENCES deployment_projects(id),
+  container_name VARCHAR(200),
+  status VARCHAR(50),
+  health_status VARCHAR(50),
+  cpu_percent DECIMAL(5,2),
+  memory_usage_mb DECIMAL(10,2),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- DB 연결 정보
+CREATE TABLE db_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  name VARCHAR(100) NOT NULL,
+  db_type VARCHAR(20) DEFAULT 'postgresql',
+  host_encrypted TEXT NOT NULL,
+  port INTEGER DEFAULT 5432,
+  database_name VARCHAR(100),
+  username_encrypted TEXT,
+  password_vault_key VARCHAR(100),
+  is_read_only BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- MyBatis 매퍼
+CREATE TABLE mybatis_mappers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  name VARCHAR(200) NOT NULL,
+  namespace VARCHAR(200),
+  xml_content TEXT NOT NULL,
+  parsed_statements JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 파일 구조 (추가)
+
+```
+src/
+├── pages/
+│   └── MybatisQueryTester.tsx
+├── components/
+│   ├── deployment/
+│   │   ├── ContainerStatusGrid.tsx
+│   │   ├── PrometheusChart.tsx
+│   │   └── WebhookSettings.tsx
+│   └── mybatis/
+│       ├── XmlUploader.tsx
+│       ├── XmlEditor.tsx
+│       ├── StatementList.tsx
+│       └── DbConnectionDialog.tsx
+├── hooks/
+│   ├── use-container-status.ts
+│   ├── use-prometheus-metrics.ts
+│   └── use-db-connections.ts
+└── utils/
+    ├── prometheusApi.ts
+    └── mybatisParser.ts
+
+supabase/functions/
+└── gitlab-webhook/index.ts
+```
+
+---
+
+## Sprint 9: MyBatis 완성 + 환경변수 관리 기초
+
+### 목표
+
+쿼리 실행/EXPLAIN 시각화, 환경변수 MVP
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 파라미터 치환 | MyBatis 파라미터 → 실제 값 변환 | 🔜 |
+| 쿼리 실행 | Edge Function으로 보안 실행 (SELECT만) | 🔜 |
+| EXPLAIN 시각화 | 실행 계획 트리/테이블 표시 | 🔜 |
+| 환경변수 CRUD | 환경별 변수 관리 (local/dev/prod) | 🔜 |
+| .env 가져오기/내보내기 | 파일 파싱 및 생성 | 🔜 |
+
+### 추가 Database Schema
+
+```sql
+-- 쿼리 실행 이력
+CREATE TABLE query_executions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  connection_id UUID NOT NULL REFERENCES db_connections(id),
+  mapper_id UUID REFERENCES mybatis_mappers(id),
+  statement_id VARCHAR(200),
+  sql_executed TEXT NOT NULL,
+  parameters JSONB,
+  result_row_count INTEGER,
+  execution_time_ms INTEGER,
+  explain_result JSONB,
+  executed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 환경 정의
+CREATE TABLE environments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  name VARCHAR(50) NOT NULL,
+  color VARCHAR(7),
+  sort_order INTEGER DEFAULT 0,
+  UNIQUE(team_id, name)
+);
+
+-- 환경변수 그룹
+CREATE TABLE env_variable_groups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 환경변수
+CREATE TABLE env_variables (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  group_id UUID NOT NULL REFERENCES env_variable_groups(id),
+  environment_id UUID NOT NULL REFERENCES environments(id),
+  key VARCHAR(200) NOT NULL,
+  value_vault_key VARCHAR(200),
+  value_plain TEXT,
+  is_secret BOOLEAN DEFAULT false,
+  description TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(group_id, environment_id, key)
+);
+```
+
+### 파일 구조 (추가)
+
+```
+src/
+├── pages/
+│   └── EnvManager.tsx
+├── components/
+│   ├── mybatis/
+│   │   ├── ParameterForm.tsx
+│   │   ├── SqlPreview.tsx
+│   │   ├── QueryExecutor.tsx
+│   │   ├── ResultTable.tsx
+│   │   └── ExplainViewer.tsx
+│   └── env/
+│       ├── EnvironmentTabs.tsx
+│       ├── VariableGroupCard.tsx
+│       ├── VariableTable.tsx
+│       ├── VariableForm.tsx
+│       └── ImportExportDialog.tsx
+├── hooks/
+│   ├── use-query-execution.ts
+│   ├── use-environments.ts
+│   └── use-env-variables.ts
+└── utils/
+    ├── sqlParameterizer.ts
+    ├── envFileParser.ts
+    └── envFileExporter.ts
+
+supabase/functions/
+└── execute-query/index.ts
+```
+
+---
+
+## Sprint 10: 환경변수 완성 + 코드 리뷰 체크리스트
+
+### 목표
+
+변경 이력 추적, 팀 공유, 코드 리뷰 MVP
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 감사 로그 | 환경변수 변경 이력 추적 | 🔜 |
+| 환경별 비교 | local/dev/prod 값 비교 뷰 | 🔜 |
+| 팀 공유 | 환경변수 그룹 팀원 공유 | 🔜 |
+| Spring Boot 체크리스트 | 기본 템플릿 제공 | 🔜 |
+| 리뷰 세션 관리 | 시작/완료, PR 연동 | 🔜 |
+
+### 추가 Database Schema
+
+```sql
+-- 환경변수 감사 로그
+CREATE TABLE env_variable_audit_log (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  variable_id UUID NOT NULL REFERENCES env_variables(id),
+  action VARCHAR(20) NOT NULL, -- 'create', 'update', 'delete'
+  old_value_hash VARCHAR(64),
+  new_value_hash VARCHAR(64),
+  changed_by UUID NOT NULL REFERENCES auth.users(id),
+  changed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 리뷰 템플릿
+CREATE TABLE review_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID REFERENCES teams(id),
+  name VARCHAR(200) NOT NULL,
+  category VARCHAR(50), -- 'spring-boot', 'react', 'security'
+  items JSONB NOT NULL,
+  is_system BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 리뷰 세션
+CREATE TABLE review_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  template_id UUID REFERENCES review_templates(id),
+  title VARCHAR(300) NOT NULL,
+  pr_url VARCHAR(500),
+  reviewer_id UUID NOT NULL REFERENCES auth.users(id),
+  status VARCHAR(20) DEFAULT 'in_progress',
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+-- 체크 결과
+CREATE TABLE review_checks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES review_sessions(id),
+  item_id VARCHAR(50) NOT NULL,
+  status VARCHAR(20) NOT NULL, -- 'passed', 'failed', 'skipped'
+  comment TEXT,
+  checked_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 파일 구조 (추가)
+
+```
+src/
+├── pages/
+│   └── CodeReviewHelper.tsx
+├── components/
+│   ├── env/
+│   │   ├── AuditLogDrawer.tsx
+│   │   ├── CompareView.tsx
+│   │   └── TeamShareDialog.tsx
+│   └── review/
+│       ├── TemplateSelector.tsx
+│       ├── ChecklistView.tsx
+│       ├── CheckItem.tsx
+│       ├── SessionSummary.tsx
+│       └── ReviewStats.tsx
+├── hooks/
+│   ├── use-env-audit-log.ts
+│   ├── use-review-templates.ts
+│   └── use-review-sessions.ts
+└── data/
+    └── springBootChecklist.ts
+```
+
+---
+
+## Sprint 11: 코드 리뷰 완성 + API 영향도 분석기
+
+### 목표
+
+리뷰 통계, API 영향도 분석 MVP
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 리뷰 통계 | 팀/개인별 통계 대시보드 | 🔜 |
+| 커스텀 템플릿 | 체크리스트 템플릿 편집 | 🔜 |
+| API 수동 등록 | 엔드포인트 정보 입력 | 🔜 |
+| OpenAPI 가져오기 | swagger.json/openapi.yaml 파싱 | 🔜 |
+| 컨슈머 매핑 | API 사용처 연결 | 🔜 |
+| 영향도 그래프 | 변경 영향 시각화 | 🔜 |
+
+### 추가 Database Schema
+
+```sql
+-- API 엔드포인트
+CREATE TABLE api_endpoints (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  service_name VARCHAR(100) NOT NULL,
+  method VARCHAR(10) NOT NULL,
+  path VARCHAR(500) NOT NULL,
+  description TEXT,
+  request_schema JSONB,
+  response_schema JSONB,
+  deprecated BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(team_id, service_name, method, path)
+);
+
+-- API 컨슈머
+CREATE TABLE api_consumers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  endpoint_id UUID NOT NULL REFERENCES api_endpoints(id),
+  consumer_type VARCHAR(50) NOT NULL, -- 'frontend', 'external', 'mobile'
+  consumer_name VARCHAR(200) NOT NULL,
+  file_path VARCHAR(500),
+  component_name VARCHAR(200),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- API 변경 기록
+CREATE TABLE api_changes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  endpoint_id UUID NOT NULL REFERENCES api_endpoints(id),
+  change_type VARCHAR(50) NOT NULL, -- 'breaking', 'non-breaking', 'deprecation'
+  description TEXT NOT NULL,
+  impact_level VARCHAR(20),
+  affected_consumers UUID[],
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 파일 구조 (추가)
+
+```
+src/
+├── pages/
+│   └── ApiImpactAnalyzer.tsx
+├── components/
+│   ├── review/
+│   │   ├── TemplateEditor.tsx
+│   │   └── StatsByCategory.tsx
+│   └── api-impact/
+│       ├── EndpointRegistration.tsx
+│       ├── EndpointList.tsx
+│       ├── ConsumerMapping.tsx
+│       ├── ImpactGraph.tsx
+│       ├── ImpactReport.tsx
+│       └── OpenApiImporter.tsx
+├── hooks/
+│   ├── use-review-stats.ts
+│   ├── use-api-endpoints.ts
+│   └── use-api-consumers.ts
+└── utils/
+    ├── impactCalculator.ts
+    ├── reportGenerator.ts
+    └── openApiParser.ts
+```
+
+---
+
+## Sprint 7-11 공통 작업
+
+### AppSidebar.tsx 메뉴 추가
+
+```typescript
+import {
+  Rocket,         // 배포 대시보드
+  Database,       // MyBatis 테스터
+  KeyRound,       // 환경변수 관리
+  ClipboardCheck, // 코드 리뷰
+  GitBranch,      // API 영향도
+} from "lucide-react";
+
+const devOpsItems = [
+  { title: "배포 현황", url: "/deployment-dashboard", icon: Rocket },
+  { title: "MyBatis 테스터", url: "/mybatis-tester", icon: Database },
+  { title: "환경변수 관리", url: "/env-manager", icon: KeyRound },
+  { title: "코드 리뷰 헬퍼", url: "/code-review", icon: ClipboardCheck },
+  { title: "API 영향도 분석", url: "/api-impact", icon: GitBranch },
+];
+```
+
+### App.tsx 라우트 추가
+
+```typescript
+<Route path="/deployment-dashboard" element={<DeploymentDashboard />} />
+<Route path="/mybatis-tester" element={<MybatisQueryTester />} />
+<Route path="/env-manager" element={<EnvManager />} />
+<Route path="/code-review" element={<CodeReviewHelper />} />
+<Route path="/api-impact" element={<ApiImpactAnalyzer />} />
+```
+
+### 의존성 추가
+
+```bash
+npm install pg xmldom xpath jspdf file-saver
+npm install -D @types/pg @types/file-saver
+```
+
+### 보안 고려사항
+
+| 영역 | 조치 |
+|------|------|
+| API 토큰 | pgcrypto 또는 Supabase Vault 암호화 |
+| DB 자격증명 | Vault 저장, Edge Function에서만 복호화 |
+| 쿼리 실행 | SELECT만 허용, 타임아웃 30초 |
+| Webhook | 프로젝트별 고유 시크릿 검증 |
+| 환경변수 | 민감값 마스킹, 해시만 로깅 |
+
+---
+
+## 향후 확장 (Phase 6)
+
+### 고급 기능
+
+- 실시간 알림 (Supabase Realtime)
+- 슬랙/디스코드 연동
+- 대시보드 커스터마이징
+- API 문서 자동 생성
+- 테스트 커버리지 연동
