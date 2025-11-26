@@ -2,15 +2,16 @@ import { useState } from "react";
 import { DDLUploader } from "@/components/DDLUploader";
 import { TablePreview } from "@/components/TablePreview";
 import { ErdViewer } from "@/components/ErdViewer";
+import { DebugInfo, ParseStats } from "@/components/DebugInfo";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { parseDDL, Table, DatabaseType } from "@/utils/ddlParser";
+import { parseDDL, Table, DatabaseType, ParseResult } from "@/utils/ddlParser";
 import { formatAndSortDDL, cleanupDDLText } from "@/utils/ddlFormatter";
 import { exportToExcel } from "@/utils/excelExporter";
-import { FileSpreadsheet, Wand2, Database, Network, ArrowDownUp } from "lucide-react";
+import { FileSpreadsheet, Wand2, Database, Network, ArrowDownUp, Bug } from "lucide-react";
 import { toast } from "sonner";
 
 const DdlConverter = () => {
@@ -19,6 +20,8 @@ const DdlConverter = () => {
   const [dbType, setDbType] = useState<DatabaseType>('auto');
   const [autoSort, setAutoSort] = useState(true);
   const [isFormatted, setIsFormatted] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
+  const [parseStats, setParseStats] = useState<ParseStats | null>(null);
 
   const handleDDLChange = (newDdl: string) => {
     setDdlText(newDdl);
@@ -67,7 +70,7 @@ const DdlConverter = () => {
       
       if (autoSort && !isFormatted) {
         const tables = parseDDL(ddlText, dbType);
-        if (tables.length > 0) {
+        if (Array.isArray(tables) && tables.length > 0) {
           const detectedDbType = dbType === 'auto' ? 'postgresql' : dbType;
           const formatted = formatAndSortDDL(tables, detectedDbType);
           textToParse = cleanupDDLText(formatted);
@@ -77,19 +80,47 @@ const DdlConverter = () => {
         }
       }
 
-      const tables = parseDDL(textToParse, dbType);
-      if (tables.length === 0) {
-        toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
-        return;
-      }
-      setParsedTables(tables);
+      const result = debugMode 
+        ? parseDDL(textToParse, dbType, true)
+        : parseDDL(textToParse, dbType);
       
-      // 관계 정보 표시
-      const totalRelations = tables.reduce((sum, t) => sum + t.foreignKeys.length, 0);
-      toast.success(`${tables.length}개의 테이블과 ${totalRelations}개의 관계를 파싱했습니다.`);
+      if (debugMode && !Array.isArray(result)) {
+        // 디버그 모드인 경우
+        const parseResult = result as ParseResult;
+        setParsedTables(parseResult.tables);
+        setParseStats({
+          ...parseResult.stats,
+          errors: parseResult.errors,
+          warnings: parseResult.warnings
+        });
+        
+        if (parseResult.tables.length === 0) {
+          toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
+        } else {
+          const totalRelations = parseResult.tables.reduce((sum, t) => sum + t.foreignKeys.length, 0);
+          toast.success(`${parseResult.tables.length}개의 테이블과 ${totalRelations}개의 관계를 파싱했습니다.`);
+          
+          if (parseResult.errors.length > 0) {
+            toast.warning(`${parseResult.errors.length}개의 오류가 발견되었습니다. 디버그 탭을 확인하세요.`);
+          }
+        }
+      } else {
+        // 일반 모드인 경우
+        const tables = result as Table[];
+        if (tables.length === 0) {
+          toast.error("유효한 CREATE TABLE 문을 찾을 수 없습니다.");
+          return;
+        }
+        setParsedTables(tables);
+        setParseStats(null);
+        
+        const totalRelations = tables.reduce((sum, t) => sum + t.foreignKeys.length, 0);
+        toast.success(`${tables.length}개의 테이블과 ${totalRelations}개의 관계를 파싱했습니다.`);
+      }
     } catch (error) {
       console.error("Parsing error:", error);
       toast.error("DDL 파싱 중 오류가 발생했습니다.");
+      setParseStats(null);
     }
   };
 
@@ -218,6 +249,18 @@ CREATE TABLE comments (
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label>디버그 모드</Label>
+              <div className="flex items-center h-10 px-3 border rounded-md bg-background">
+                <Switch 
+                  checked={debugMode} 
+                  onCheckedChange={setDebugMode}
+                  className="mr-2"
+                />
+                <span className="text-sm">{debugMode ? '활성화' : '비활성화'}</span>
+              </div>
+            </div>
+
             <div className="flex gap-2">
               <Button 
                 onClick={handleAutoFormat} 
@@ -252,7 +295,7 @@ CREATE TABLE comments (
         {/* Right Panel - Preview & ERD */}
         <div className="space-y-4">
           <Tabs defaultValue="tables" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className={`grid w-full ${debugMode ? 'grid-cols-3' : 'grid-cols-2'}`}>
               <TabsTrigger value="tables">
                 <Database className="w-4 h-4 mr-2" />
                 테이블 정의
@@ -261,6 +304,12 @@ CREATE TABLE comments (
                 <Network className="w-4 h-4 mr-2" />
                 ERD
               </TabsTrigger>
+              {debugMode && (
+                <TabsTrigger value="debug">
+                  <Bug className="w-4 h-4 mr-2" />
+                  디버그
+                </TabsTrigger>
+              )}
             </TabsList>
             
             <TabsContent value="tables" className="mt-4">
@@ -270,6 +319,12 @@ CREATE TABLE comments (
             <TabsContent value="erd" className="mt-4">
               <ErdViewer tables={parsedTables} />
             </TabsContent>
+            
+            {debugMode && parseStats && (
+              <TabsContent value="debug" className="mt-4">
+                <DebugInfo stats={parseStats} />
+              </TabsContent>
+            )}
           </Tabs>
           
           {parsedTables.length > 0 && (
