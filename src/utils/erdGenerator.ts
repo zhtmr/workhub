@@ -8,15 +8,27 @@ export interface ErdRelationship {
   type: 'one-to-many' | 'many-to-one' | 'one-to-one';
 }
 
+function sanitizeTableName(name: string): string {
+  // Mermaid ERD에서 사용할 수 있도록 테이블명 정제
+  // 점, 특수문자를 언더스코어로 변환
+  return name.replace(/[.\s-]/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+}
+
 export function generateMermaidERD(tables: Table[]): string {
   let mermaidCode = 'erDiagram\n';
   
   // 테이블 정의
   tables.forEach(table => {
-    mermaidCode += `  ${table.name} {\n`;
+    const sanitizedTableName = sanitizeTableName(table.name);
+    mermaidCode += `  ${sanitizedTableName} {\n`;
     
     table.columns.forEach(column => {
-      const type = column.dataType.toUpperCase();
+      // 데이터 타입 정제 (괄호와 특수문자 제거하여 간단하게)
+      let type = column.dataType.toUpperCase()
+        .replace(/\([^)]*\)/g, '') // 크기 정보 제거
+        .replace(/\[\]/g, '_ARRAY') // 배열 표시
+        .substring(0, 20); // 길이 제한
+      
       let modifiers = [];
       
       if (column.isPrimaryKey) modifiers.push('PK');
@@ -25,7 +37,9 @@ export function generateMermaidERD(tables: Table[]): string {
       if (column.key === 'UQ') modifiers.push('UNIQUE');
       
       const modifierStr = modifiers.length > 0 ? ` "${modifiers.join(', ')}"` : '';
-      const commentStr = column.comment ? ` "${column.comment}"` : '';
+      // 주석에서 따옴표 제거 (Mermaid 파싱 에러 방지)
+      const cleanComment = column.comment ? column.comment.replace(/['"]/g, '') : '';
+      const commentStr = cleanComment ? ` "${cleanComment}"` : '';
       
       mermaidCode += `    ${type} ${column.name}${modifierStr}${commentStr}\n`;
     });
@@ -48,7 +62,10 @@ export function generateMermaidERD(tables: Table[]): string {
       relationSymbol = '||--||';
     }
     
-    mermaidCode += `  ${rel.from} ${relationSymbol} ${rel.to} : "${rel.fromColumn} -> ${rel.toColumn}"\n`;
+    const fromTable = sanitizeTableName(rel.from);
+    const toTable = sanitizeTableName(rel.to);
+    
+    mermaidCode += `  ${fromTable} ${relationSymbol} ${toTable} : "${rel.fromColumn} to ${rel.toColumn}"\n`;
   });
   
   return mermaidCode;

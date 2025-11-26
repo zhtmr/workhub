@@ -39,25 +39,31 @@ export function parseDDL(ddlText: string, dbType: DatabaseType = 'auto'): Table[
   
   // CREATE TABLE 문들을 찾기 (MySQL, PostgreSQL 지원)
   // PostgreSQL의 경우 스키마명도 고려
-  const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[`"]?(\w+)[`"]?\.)?[`"]?(\w+)[`"]?\s*\(([\s\S]*?)\)(?:\s*(?:COMMENT\s*=?\s*['"]([^'"]*?)['"]|;))?/gi;
+  const createTableRegex = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(\w+)\.)?(\w+)\s*\(([\s\S]*?)\)(?:\s*(?:COMMENT\s*=?\s*['"]([^'"]*?)['"]|;))?/gi;
   
   let match;
   while ((match = createTableRegex.exec(ddlText)) !== null) {
     const schema = match[1];
-    const tableName = match[2] || match[1]; // 스키마가 없으면 match[1]이 테이블명
-    const columnsText = match[3] || match[2];
-    const tableComment = match[4] || match[3] || '';
+    const tableName = match[2];
+    const columnsText = match[3];
+    const inlineTableComment = match[4] || '';
     
     const { columns, primaryKeys, foreignKeys } = parseColumns(columnsText, dbType);
     
+    // 테이블 이름 (스키마명 제거)
+    const fullTableName = schema ? `${schema}.${tableName}` : tableName;
+    
     tables.push({
-      name: tableName,
-      comment: tableComment,
+      name: tableName, // 스키마명 제거한 순수 테이블명
+      comment: inlineTableComment,
       columns,
       primaryKeys,
       foreignKeys
     });
   }
+  
+  // COMMENT ON TABLE/COLUMN 파싱 (DataGrip PostgreSQL 스타일)
+  parseCommentOnStatements(ddlText, tables);
   
   // ALTER TABLE에서 외래키 추가 파싱
   parseAlterTableForeignKeys(ddlText, tables, dbType);
@@ -87,6 +93,39 @@ function detectDatabaseType(ddlText: string): DatabaseType {
   
   // 기본값
   return 'mysql';
+}
+
+function parseCommentOnStatements(ddlText: string, tables: Table[]) {
+  // COMMENT ON TABLE 파싱
+  const tableCommentRegex = /COMMENT\s+ON\s+TABLE\s+(?:(\w+)\.)?(\w+)\s+IS\s+['"]([^'"]+)['"]/gi;
+  let match;
+  
+  while ((match = tableCommentRegex.exec(ddlText)) !== null) {
+    const tableName = match[2];
+    const comment = match[3];
+    
+    const table = tables.find(t => t.name === tableName);
+    if (table && !table.comment) {
+      table.comment = comment;
+    }
+  }
+  
+  // COMMENT ON COLUMN 파싱
+  const columnCommentRegex = /COMMENT\s+ON\s+COLUMN\s+(?:(\w+)\.)?(\w+)\.(\w+)\s+IS\s+['"]([^'"]+)['"]/gi;
+  
+  while ((match = columnCommentRegex.exec(ddlText)) !== null) {
+    const tableName = match[2];
+    const columnName = match[3];
+    const comment = match[4];
+    
+    const table = tables.find(t => t.name === tableName);
+    if (table) {
+      const column = table.columns.find(c => c.name === columnName);
+      if (column && !column.comment) {
+        column.comment = comment;
+      }
+    }
+  }
 }
 
 function parseColumns(columnsText: string, dbType: DatabaseType) {
@@ -135,18 +174,26 @@ function parseColumns(columnsText: string, dbType: DatabaseType) {
       continue;
     }
     
-    // 컬럼 정보 파싱
-    const columnMatch = line.match(/[`"]?(\w+)[`"]?\s+([^\s,]+)([^,]*)/i);
+    // 컬럼 정보 파싱 (복잡한 DEFAULT 절 처리)
+    // DEFAULT에 함수나 복잡한 표현식이 있을 수 있으므로 더 유연하게 파싱
+    const columnMatch = line.match(/^(\w+)\s+([^\s,]+)([\s\S]*)/i);
     if (!columnMatch) continue;
     
     const columnName = columnMatch[1];
     let dataType = columnMatch[2];
-    const rest = columnMatch[3] || '';
+    let rest = columnMatch[3] || '';
     
     // 데이터 타입에서 크기 정보 포함
     const sizeMatch = rest.match(/^\s*\(([^)]+)\)/);
     if (sizeMatch) {
       dataType += sizeMatch[0];
+      rest = rest.substring(sizeMatch[0].length);
+    }
+    
+    // 배열 타입 처리 (PostgreSQL)
+    if (rest.trim().startsWith('[]')) {
+      dataType += '[]';
+      rest = rest.substring(2);
     }
     
     // NULL 여부 확인
@@ -188,11 +235,16 @@ function parseColumns(columnsText: string, dbType: DatabaseType) {
       }
     }
     
-    // 기본값 확인
+    // 기본값 확인 (복잡한 표현식 처리)
     let defaultValue = '';
-    const defaultMatch = rest.match(/DEFAULT\s+([^\s,]+)/i);
+    // DEFAULT 다음에 괄호로 묶인 복잡한 표현식이 올 수 있음
+    const defaultMatch = rest.match(/DEFAULT\s+(\([^)]+\)|'[^']+'|"[^"]+"|[\w.]+(?:\([^)]*\))?)/i);
     if (defaultMatch) {
-      defaultValue = defaultMatch[1].replace(/['"]/g, '');
+      defaultValue = defaultMatch[1].replace(/^['"]|['"]$/g, '');
+      // 너무 긴 경우 축약
+      if (defaultValue.length > 50) {
+        defaultValue = defaultValue.substring(0, 47) + '...';
+      }
     }
     
     // 주석 확인 (MySQL, PostgreSQL 모두 지원)
@@ -219,15 +271,15 @@ function parseColumns(columnsText: string, dbType: DatabaseType) {
 }
 
 function parseAlterTableForeignKeys(ddlText: string, tables: Table[], dbType: DatabaseType) {
-  // ALTER TABLE ... ADD FOREIGN KEY 파싱
-  const alterFKRegex = /ALTER\s+TABLE\s+[`"]?(\w+)[`"]?\s+ADD\s+(?:CONSTRAINT\s+[`"]?\w+[`"]?\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+[`"]?(\w+)[`"]?\s*\(([^)]+)\)/gi;
+  // ALTER TABLE ... ADD FOREIGN KEY 파싱 (스키마명 처리)
+  const alterFKRegex = /ALTER\s+TABLE\s+(?:(\w+)\.)?(\w+)\s+ADD\s+(?:CONSTRAINT\s+\w+\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+(?:(\w+)\.)?(\w+)\s*\(([^)]+)\)/gi;
   
   let match;
   while ((match = alterFKRegex.exec(ddlText)) !== null) {
-    const tableName = match[1];
-    const column = match[2].trim().replace(/[`"]/g, '');
-    const refTable = match[3];
-    const refColumn = match[4].trim().replace(/[`"]/g, '');
+    const tableName = match[2]; // 스키마명 제외한 테이블명
+    const column = match[3].trim().replace(/[`"]/g, '');
+    const refTable = match[5]; // 참조 테이블명 (스키마명 제외)
+    const refColumn = match[6].trim().replace(/[`"]/g, '');
     
     const table = tables.find(t => t.name === tableName);
     if (table) {
