@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { DDLUploader } from "@/components/DDLUploader";
 import { TablePreview } from "@/components/TablePreview";
 import { ErdViewer } from "@/components/ErdViewer";
@@ -10,8 +11,16 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { parseDDL, Table, DatabaseType, ParseResult } from "@/utils/ddlParser";
 import { exportToExcel } from "@/utils/excelExporter";
-import { FileSpreadsheet, Wand2, Database, Network, Bug } from "lucide-react";
+import { useHistory } from "@/hooks/use-history";
+import { useAuth } from "@/providers/AuthProvider";
+import { FileSpreadsheet, Wand2, Database, Network, Bug, Save } from "lucide-react";
 import { toast } from "sonner";
+
+interface LocationState {
+  ddlContent?: string;
+  dbType?: string;
+  fromHistory?: boolean;
+}
 
 const DdlConverter = () => {
   const [ddlText, setDdlText] = useState("");
@@ -19,6 +28,24 @@ const DdlConverter = () => {
   const [dbType, setDbType] = useState<DatabaseType>('auto');
   const [debugMode, setDebugMode] = useState(false);
   const [parseStats, setParseStats] = useState<ParseStats | null>(null);
+
+  const location = useLocation();
+  const { user } = useAuth();
+  const { saveToHistory, isSaving } = useHistory();
+
+  // Load DDL from history navigation
+  useEffect(() => {
+    const state = location.state as LocationState;
+    if (state?.fromHistory && state.ddlContent) {
+      setDdlText(state.ddlContent);
+      if (state.dbType) {
+        setDbType(state.dbType as DatabaseType);
+      }
+      toast.info('히스토리에서 DDL을 불러왔습니다.');
+      // Clear the state to prevent reloading on subsequent renders
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
 
   const handleDDLChange = (newDdl: string) => {
     setDdlText(newDdl);
@@ -50,9 +77,21 @@ const DdlConverter = () => {
         } else {
           const totalRelations = parseResult.tables.reduce((sum, t) => sum + t.foreignKeys.length, 0);
           toast.success(`${parseResult.tables.length}개의 테이블과 ${totalRelations}개의 관계를 파싱했습니다.`);
-          
+
           if (parseResult.errors.length > 0) {
             toast.warning(`${parseResult.errors.length}개의 오류가 발견되었습니다. 디버그 탭을 확인하세요.`);
+          }
+
+          // Save to history if user is logged in
+          if (user) {
+            const totalColumns = parseResult.tables.reduce((sum, t) => sum + t.columns.length, 0);
+            saveToHistory({
+              ddlContent: ddlText,
+              dbType: dbType === 'auto' ? 'auto' : dbType,
+              tableCount: parseResult.tables.length,
+              columnCount: totalColumns,
+              parsedResult: parseResult.tables,
+            });
           }
         }
       } else {
@@ -64,9 +103,21 @@ const DdlConverter = () => {
         }
         setParsedTables(tables);
         setParseStats(null);
-        
+
         const totalRelations = tables.reduce((sum, t) => sum + t.foreignKeys.length, 0);
         toast.success(`${tables.length}개의 테이블과 ${totalRelations}개의 관계를 파싱했습니다.`);
+
+        // Save to history if user is logged in
+        if (user) {
+          const totalColumns = tables.reduce((sum, t) => sum + t.columns.length, 0);
+          saveToHistory({
+            ddlContent: ddlText,
+            dbType: dbType === 'auto' ? 'auto' : dbType,
+            tableCount: tables.length,
+            columnCount: totalColumns,
+            parsedResult: tables,
+          });
+        }
       }
     } catch (error) {
       console.error("Parsing error:", error);

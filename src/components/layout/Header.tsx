@@ -1,6 +1,8 @@
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Separator } from "@/components/ui/separator";
 import { Briefcase } from "lucide-react";
+import { ThemeToggle } from "./ThemeToggle";
+import { UserMenu } from "@/components/auth/UserMenu";
 
 export function Header() {
   return (
@@ -16,6 +18,15 @@ export function Header() {
             <h1 className="text-sm font-semibold text-foreground">WorkHub</h1>
             <p className="text-xs text-muted-foreground">통합 업무 시스템</p>
           </div>
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Right side actions */}
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <UserMenu />
         </div>
       </div>
     </header>

@@ -1,11 +1,12 @@
-import { 
-  Home, 
-  Database, 
-  FileSpreadsheet, 
-  Settings, 
+import {
+  Home,
+  Database,
+  FileSpreadsheet,
+  Settings,
   FileText,
   Calculator,
-  BarChart3
+  BarChart3,
+  History
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -26,6 +27,7 @@ import {
 const mainItems = [
   { title: "대시보드", url: "/", icon: Home },
   { title: "DDL 변환기", url: "/ddl-converter", icon: Database },
+  { title: "히스토리", url: "/history", icon: History },
 ];
 
 const toolsItems = [
