@@ -531,4 +531,69 @@ export const supabaseFetch = {
       return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
     }
   },
+
+  // =====================================================
+  // User APIs
+  // =====================================================
+
+  /**
+   * Find user by email using RPC function
+   * Requires: get_user_id_by_email function in Supabase
+   */
+  async getUserByEmail(email: string, accessToken?: string): Promise<{ data: { id: string; email: string } | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/rpc/get_user_id_by_email`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ user_email: email }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.message || '사용자를 찾을 수 없습니다') };
+      }
+
+      const data = await response.json();
+      if (!data) {
+        return { data: null, error: new Error('해당 이메일로 가입된 사용자가 없습니다') };
+      }
+
+      return { data: { id: data, email }, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Update team member role
+   */
+  async updateTeamMemberRole(teamId: string, userId: string, role: string, accessToken?: string): Promise<{ error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/team_members?team_id=eq.${teamId}&user_id=eq.${userId}`,
+        {
+          method: 'PATCH',
+          headers: {
+            ...headers,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify({ role }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: new Error(errorData.message || '역할 변경에 실패했습니다') };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
 };

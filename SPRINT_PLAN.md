@@ -1,6 +1,6 @@
 # WorkHub 남은 스프린트 구현 계획
 
-> 마지막 업데이트: 2025-11-27 Sprint 7 완료
+> 마지막 업데이트: 2025-11-27 Sprint 7 완료 (팀 멤버 관리 UI, GitLab API 폴링, 페이지네이션 추가)
 
 ## 프로젝트 현황
 
@@ -403,8 +403,10 @@ src/
 | 기능 | 설명 | 상태 |
 |------|------|------|
 | 팀/조직 관리 | 팀 생성, 멤버 초대, 역할 관리 | ✅ |
+| 팀 멤버 관리 UI | 이메일로 멤버 초대, 역할 변경, 멤버 제거 | ✅ |
 | 프로젝트 등록 | GitLab URL, API 토큰, Prometheus 엔드포인트 | ✅ |
-| GitLab API 연동 | 파이프라인 상태 조회 | ✅ |
+| GitLab API 연동 | 파이프라인 상태 조회 (API 폴링 방식) | ✅ |
+| 파이프라인 페이지네이션 | 무한 스크롤 + 더 보기 버튼 | ✅ |
 | 배포 대시보드 UI | 프로젝트별 상태 카드, 타임라인 | ✅ |
 
 ### 구현된 파일
@@ -412,16 +414,20 @@ src/
 ```
 sql/
 ├── 001_sprint7_teams_deployment.sql  # DB 스키마
-└── 003_fix_all_rls.sql               # RLS 정책 (무한재귀 수정)
+├── 003_fix_all_rls.sql               # RLS 정책 (무한재귀 수정)
+└── 004_user_lookup_function.sql      # 이메일로 사용자 조회 함수
 
 src/
 ├── types/
 │   └── deployment.ts                 # 타입 정의
 ├── hooks/
 │   ├── use-teams.ts                  # 팀 CRUD 훅
-│   └── use-deployment-projects.ts    # 프로젝트/파이프라인 훅
+│   ├── use-deployment-projects.ts    # 프로젝트/파이프라인 훅
+│   └── use-gitlab-pipelines.ts       # GitLab API 폴링 (무한 스크롤)
 ├── utils/
 │   └── gitlabApi.ts                  # GitLab API 클라이언트
+├── lib/
+│   └── supabase-fetch.ts             # getUserByEmail, updateTeamMemberRole 추가
 ├── components/
 │   └── deployment/
 │       ├── index.ts
@@ -429,7 +435,8 @@ src/
 │       ├── DeploymentStats.tsx
 │       ├── ProjectCard.tsx
 │       ├── PipelineTimeline.tsx
-│       └── ProjectRegistrationDialog.tsx
+│       ├── ProjectRegistrationDialog.tsx
+│       └── TeamSettingsDialog.tsx    # 팀 설정/멤버 관리 다이얼로그
 ├── pages/
 │   └── DeploymentDashboard.tsx
 └── components/layout/
@@ -499,19 +506,31 @@ src/
 │   └── DeploymentDashboard.tsx
 ├── components/
 │   └── deployment/
+│       ├── index.ts
 │       ├── ProjectRegistrationDialog.tsx
 │       ├── ProjectCard.tsx
 │       ├── PipelineTimeline.tsx
 │       ├── PipelineStatusBadge.tsx
-│       └── DeploymentStats.tsx
+│       ├── DeploymentStats.tsx
+│       └── TeamSettingsDialog.tsx
 ├── hooks/
 │   ├── use-teams.ts
-│   └── use-deployment-projects.ts
+│   ├── use-deployment-projects.ts
+│   └── use-gitlab-pipelines.ts
 ├── utils/
 │   └── gitlabApi.ts
+├── lib/
+│   └── supabase-fetch.ts
 └── types/
     └── deployment.ts
 ```
+
+### 사용법
+
+1. **GitLab 연동**: 프로젝트 등록 시 GitLab URL(베이스 URL만), 프로젝트 ID, API 토큰 입력
+2. **파이프라인 조회**: 프로젝트 카드 클릭 → 우측에 파이프라인 타임라인 표시
+3. **팀 멤버 관리**: 팀 드롭다운 옆 ⚙️ 버튼 → 멤버 관리 탭에서 이메일로 초대
+4. **로그아웃**: 우측 상단 프로필 아이콘 → 로그아웃
 
 ---
 

@@ -3,3 +3,4 @@ export { DeploymentStats } from "./DeploymentStats";
 export { ProjectCard } from "./ProjectCard";
 export { PipelineTimeline } from "./PipelineTimeline";
 export { ProjectRegistrationDialog } from "./ProjectRegistrationDialog";
+export { TeamSettingsDialog } from "./TeamSettingsDialog";

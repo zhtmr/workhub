@@ -32,6 +32,7 @@ import {
   ProjectRegistrationDialog,
   DeploymentStats,
   PipelineTimeline,
+  TeamSettingsDialog,
 } from "@/components/deployment";
 import type { ProjectWithStatus, ProjectFormData } from "@/types/deployment";
 import { toast } from "sonner";
@@ -67,8 +68,12 @@ const DeploymentDashboard = () => {
 
   // Dialog states
   const [showProjectDialog, setShowProjectDialog] = useState(false);
+  const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithStatus | null>(null);
   const [deletingProject, setDeletingProject] = useState<ProjectWithStatus | null>(null);
+
+  // 선택된 팀 객체 찾기
+  const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
 
   // Auto-select first team
   useEffect(() => {
@@ -200,6 +205,17 @@ const DeploymentDashboard = () => {
               ))}
             </SelectContent>
           </Select>
+
+          {/* Team Settings Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setShowTeamSettings(true)}
+            disabled={!selectedTeam}
+            title="팀 설정"
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
 
           <Button variant="outline" size="icon" onClick={() => refetch()}>
             <RefreshCw className="w-4 h-4" />
@@ -364,6 +380,13 @@ const DeploymentDashboard = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Team Settings Dialog */}
+      <TeamSettingsDialog
+        open={showTeamSettings}
+        onOpenChange={setShowTeamSettings}
+        team={selectedTeam}
+      />
     </div>
   );
 };
