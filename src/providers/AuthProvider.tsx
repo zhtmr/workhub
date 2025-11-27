@@ -30,16 +30,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         console.error('Error fetching profile:', error);
         return;
       }
 
-      if (data) {
-        setProfile(data);
-      }
+      setProfile(data);
     } catch (err) {
       console.error('Error fetching profile:', err);
     }
@@ -119,10 +117,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Sign out
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // 로컬 상태 먼저 초기화
     setUser(null);
     setSession(null);
     setProfile(null);
+
+    // 로컬 스토리지에서 Supabase 세션 직접 삭제
+    const keys = Object.keys(localStorage);
+    keys.forEach((key) => {
+      if (key.startsWith('sb-') && key.includes('-auth-token')) {
+        localStorage.removeItem(key);
+      }
+    });
+
+    // Supabase signOut 시도 (타임아웃 적용)
+    try {
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('signOut timeout')), 3000)
+      );
+      await Promise.race([supabase.auth.signOut(), timeoutPromise]);
+    } catch (err) {
+      console.warn('Supabase signOut failed or timed out:', err);
+    }
   };
 
   // Update user profile

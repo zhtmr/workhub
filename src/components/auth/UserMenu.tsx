@@ -33,9 +33,11 @@ export function UserMenu() {
   const initials = displayName.slice(0, 2).toUpperCase();
   const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
 
-  const handleSignOut = async () => {
-    await signOut();
-    navigate('/');
+  const handleSignOut = () => {
+    console.log('handleSignOut called');
+    signOut()
+      .catch((err) => console.error('Sign out error:', err))
+      .finally(() => navigate('/'));
   };
 
   return (
@@ -60,16 +62,16 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => navigate('/history')}>
+        <DropdownMenuItem onSelect={() => navigate('/history')}>
           <History className="mr-2 h-4 w-4" />
           작업 히스토리
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate('/settings')}>
+        <DropdownMenuItem onSelect={() => navigate('/settings')}>
           <Settings className="mr-2 h-4 w-4" />
           설정
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={handleSignOut} className="text-destructive">
+        <DropdownMenuItem onSelect={handleSignOut} className="text-destructive">
           <LogOut className="mr-2 h-4 w-4" />
           로그아웃
         </DropdownMenuItem>
