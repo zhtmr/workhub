@@ -3,10 +3,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { GitCommit, GitBranch } from "lucide-react";
 import { PipelineStatusBadge } from "./PipelineStatusBadge";
 import { formatDuration } from "@/utils/gitlabApi";
-import type { PipelineEventRow } from "@/lib/supabase-fetch";
+import type { PipelineEvent } from "@/types/deployment";
 
 interface PipelineTimelineProps {
-  events: PipelineEventRow[];
+  events: PipelineEvent[];
   maxHeight?: string;
   title?: string;
 }

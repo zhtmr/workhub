@@ -24,9 +24,9 @@ import { useAuth } from "@/providers/AuthProvider";
 import { useTeams } from "@/hooks/use-teams";
 import {
   useProjectsWithLatestPipeline,
-  usePipelineEvents,
   useDeploymentProjects,
 } from "@/hooks/use-deployment-projects";
+import { useGitLabPipelines } from "@/hooks/use-gitlab-pipelines";
 import {
   ProjectCard,
   ProjectRegistrationDialog,
@@ -50,7 +50,12 @@ const DeploymentDashboard = () => {
 
   // Selected project for detail view
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const { events, stats } = usePipelineEvents(selectedProjectId);
+
+  // 선택된 프로젝트 객체 찾기
+  const selectedProject = projects.find((p) => p.id === selectedProjectId) || null;
+
+  // GitLab API에서 파이프라인 데이터 조회
+  const { events, stats, isLoading: pipelinesLoading, hasGitLabConfig } = useGitLabPipelines(selectedProject);
 
   // Dialog states
   const [showProjectDialog, setShowProjectDialog] = useState(false);
@@ -200,9 +205,9 @@ const DeploymentDashboard = () => {
       </div>
 
       {/* Main Content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-5 lg:grid-cols-3 gap-6">
         {/* Project List */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="xl:col-span-3 lg:col-span-2 space-y-4">
           {projectsLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[1, 2, 3, 4].map((i) => (
@@ -250,12 +255,34 @@ const DeploymentDashboard = () => {
         </div>
 
         {/* Sidebar - Stats & Timeline */}
-        <div className="space-y-6">
+        <div className="xl:col-span-2 space-y-6">
           {selectedProjectId ? (
-            <>
-              <DeploymentStats stats={stats} />
-              <PipelineTimeline events={events} maxHeight="500px" />
-            </>
+            hasGitLabConfig ? (
+              pipelinesLoading ? (
+                <Card>
+                  <CardContent className="p-8 text-center">
+                    <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+                    <p className="text-muted-foreground">파이프라인 조회 중...</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <DeploymentStats stats={stats} />
+                  <PipelineTimeline events={events} maxHeight="500px" />
+                </>
+              )
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">GitLab 설정 필요</CardTitle>
+                </CardHeader>
+                <CardContent className="text-center py-8 text-muted-foreground">
+                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                  <p>GitLab URL, 프로젝트 ID, API 토큰을</p>
+                  <p>설정하면 파이프라인을 조회할 수 있습니다</p>
+                </CardContent>
+              </Card>
+            )
           ) : (
             <Card>
               <CardHeader>

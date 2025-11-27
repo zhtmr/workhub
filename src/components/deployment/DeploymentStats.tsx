@@ -41,7 +41,7 @@ export function DeploymentStats({ stats, className }: DeploymentStatsProps) {
 
   return (
     <div className={className}>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         {statItems.map((item) => (
           <Card key={item.label}>
             <CardContent className="p-4">
