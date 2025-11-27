@@ -1,6 +1,6 @@
 # WorkHub 남은 스프린트 구현 계획
 
-> 마지막 업데이트: 2025-11-27 Sprint 7 완료 (팀 멤버 관리 UI, GitLab API 폴링, 페이지네이션 추가)
+> 마지막 업데이트: 2025-11-27 Sprint 9 완료 (쿼리 실행, EXPLAIN 시각화, 프록시 서버, 쿼리 이력)
 
 ## 프로젝트 현황
 
@@ -22,10 +22,11 @@
 | Sprint 5 | ✅ 완료 | 인코딩/Diff 도구 | Base64, URL, UUID, 해시, Diff 비교 |
 | Sprint 6 | ✅ 완료 | UX 개선 | 단축키, 드래그앤드롭, 명령 팔레트, 온보딩 |
 | Sprint 7 | ✅ 완료 | 팀 인프라 + 배포 대시보드 | 팀/조직, GitLab CI/CD, 대시보드 MVP |
-| Sprint 8 | 🔜 예정 | 배포 완성 + MyBatis 기초 | Webhook, Docker, XML 파서 |
-| Sprint 9 | 🔜 예정 | MyBatis 완성 + 환경변수 | 쿼리 실행, EXPLAIN, 환경변수 CRUD |
-| Sprint 10 | 🔜 예정 | 환경변수 완성 + 코드 리뷰 | 감사 로그, Spring Boot 체크리스트 |
-| Sprint 11 | 🔜 예정 | 코드 리뷰 완성 + API 영향도 | 통계, OpenAPI, 영향도 그래프 |
+| Sprint 8 | ✅ 완료 | 배포 완성 + MyBatis 기초 | Webhook, Prometheus, Docker, XML 파서, DB 연결 |
+| Sprint 9 | ✅ 완료 | MyBatis 완성 | 쿼리 실행, EXPLAIN 시각화, 프록시 서버, 쿼리 이력 |
+| Sprint 10 | 🔜 예정 | 환경변수 관리 | 환경변수 CRUD, .env 가져오기/내보내기, 감사 로그 |
+| Sprint 11 | 🔜 예정 | 코드 리뷰 헬퍼 | Spring Boot 체크리스트, 리뷰 세션 관리, 통계 |
+| Sprint 12 | 🔜 예정 | API 영향도 분석 | OpenAPI, 컨슈머 매핑, 영향도 그래프 |
 
 ---
 
@@ -534,7 +535,7 @@ src/
 
 ---
 
-## Sprint 8: 배포 대시보드 완성 + MyBatis 기초
+## Sprint 8: 배포 대시보드 완성 + MyBatis 기초 (완료)
 
 ### 목표
 
@@ -544,200 +545,174 @@ Webhook 수신, Prometheus/Docker 연동, MyBatis 파서 구현
 
 | 기능 | 설명 | 상태 |
 |------|------|------|
-| GitLab Webhook | Edge Function으로 파이프라인 이벤트 수신 | 🔜 |
-| Prometheus 연동 | 메트릭 조회, 차트 시각화 | 🔜 |
-| Docker 상태 | 컨테이너 헬스체크 모니터링 | 🔜 |
-| MyBatis XML 파서 | select/insert/update/delete 구문 파싱 | 🔜 |
-| DB 연결 관리 | 연결 정보 암호화 저장 | 🔜 |
+| GitLab Webhook | Edge Function으로 파이프라인 이벤트 수신 | ✅ |
+| Prometheus 연동 | 메트릭 조회, 차트 시각화 | ✅ |
+| Docker 상태 | 컨테이너 헬스체크 모니터링 | ✅ |
+| MyBatis XML 파서 | select/insert/update/delete 구문 파싱 | ✅ |
+| DB 연결 관리 | 연결 정보 저장 + UI | ✅ |
 
-### 추가 Database Schema
-
-```sql
--- 컨테이너 스냅샷
-CREATE TABLE container_snapshots (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID NOT NULL REFERENCES deployment_projects(id),
-  container_name VARCHAR(200),
-  status VARCHAR(50),
-  health_status VARCHAR(50),
-  cpu_percent DECIMAL(5,2),
-  memory_usage_mb DECIMAL(10,2),
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- DB 연결 정보
-CREATE TABLE db_connections (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id UUID NOT NULL REFERENCES teams(id),
-  name VARCHAR(100) NOT NULL,
-  db_type VARCHAR(20) DEFAULT 'postgresql',
-  host_encrypted TEXT NOT NULL,
-  port INTEGER DEFAULT 5432,
-  database_name VARCHAR(100),
-  username_encrypted TEXT,
-  password_vault_key VARCHAR(100),
-  is_read_only BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- MyBatis 매퍼
-CREATE TABLE mybatis_mappers (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id UUID NOT NULL REFERENCES teams(id),
-  name VARCHAR(200) NOT NULL,
-  namespace VARCHAR(200),
-  xml_content TEXT NOT NULL,
-  parsed_statements JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-```
-
-### 파일 구조 (추가)
+### 구현된 파일
 
 ```
-src/
-├── pages/
-│   └── MybatisQueryTester.tsx
-├── components/
-│   ├── deployment/
-│   │   ├── ContainerStatusGrid.tsx
-│   │   ├── PrometheusChart.tsx
-│   │   └── WebhookSettings.tsx
-│   └── mybatis/
-│       ├── XmlUploader.tsx
-│       ├── XmlEditor.tsx
-│       ├── StatementList.tsx
-│       └── DbConnectionDialog.tsx
-├── hooks/
-│   ├── use-container-status.ts
-│   ├── use-prometheus-metrics.ts
-│   └── use-db-connections.ts
-└── utils/
-    ├── prometheusApi.ts
-    └── mybatisParser.ts
+sql/
+├── 005_webhook_improvements.sql     # Webhook 개선 (unique constraint, 인덱스)
+└── 006_db_connections.sql           # DB 연결/쿼리 실행 이력 스키마
 
 supabase/functions/
-└── gitlab-webhook/index.ts
+└── gitlab-webhook/index.ts          # GitLab Webhook Edge Function
+
+src/
+├── pages/
+│   └── MybatisQueryTester.tsx       # MyBatis 쿼리 테스터 페이지
+├── components/
+│   ├── deployment/
+│   │   ├── WebhookSettings.tsx      # Webhook 설정 UI
+│   │   ├── PrometheusChart.tsx      # Prometheus 차트 컴포넌트
+│   │   └── ContainerStatusGrid.tsx  # Docker 컨테이너 상태 그리드
+│   └── mybatis/
+│       └── DbConnectionDialog.tsx   # DB 연결 생성/수정 다이얼로그
+├── hooks/
+│   ├── use-prometheus-metrics.ts    # Prometheus 메트릭 조회 훅
+│   └── use-db-connections.ts        # DB 연결 CRUD 훅
+└── utils/
+    ├── prometheusApi.ts             # Prometheus API 클라이언트
+    ├── dockerApi.ts                 # Docker Engine API 클라이언트
+    └── mybatisParser.ts             # MyBatis XML 파서
 ```
 
----
-
-## Sprint 9: MyBatis 완성 + 환경변수 관리 기초
-
-### 목표
-
-쿼리 실행/EXPLAIN 시각화, 환경변수 MVP
-
-### 구현 기능
-
-| 기능 | 설명 | 상태 |
-|------|------|------|
-| 파라미터 치환 | MyBatis 파라미터 → 실제 값 변환 | 🔜 |
-| 쿼리 실행 | Edge Function으로 보안 실행 (SELECT만) | 🔜 |
-| EXPLAIN 시각화 | 실행 계획 트리/테이블 표시 | 🔜 |
-| 환경변수 CRUD | 환경별 변수 관리 (local/dev/prod) | 🔜 |
-| .env 가져오기/내보내기 | 파일 파싱 및 생성 | 🔜 |
-
-### 추가 Database Schema
+### Database Schema (추가)
 
 ```sql
--- 쿼리 실행 이력
-CREATE TABLE query_executions (
+-- DB 연결 정보 (Sprint 8)
+CREATE TABLE db_connections (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  connection_id UUID NOT NULL REFERENCES db_connections(id),
-  mapper_id UUID REFERENCES mybatis_mappers(id),
-  statement_id VARCHAR(200),
-  sql_executed TEXT NOT NULL,
-  parameters JSONB,
-  result_row_count INTEGER,
-  execution_time_ms INTEGER,
-  explain_result JSONB,
-  executed_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 환경 정의
-CREATE TABLE environments (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id UUID NOT NULL REFERENCES teams(id),
-  name VARCHAR(50) NOT NULL,
-  color VARCHAR(7),
-  sort_order INTEGER DEFAULT 0,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  db_type VARCHAR(20) NOT NULL DEFAULT 'postgresql',
+  host VARCHAR(200) NOT NULL,
+  port INTEGER NOT NULL DEFAULT 5432,
+  database_name VARCHAR(100) NOT NULL,
+  username VARCHAR(100) NOT NULL,
+  password_encrypted TEXT,
+  ssl_mode VARCHAR(20) DEFAULT 'disable',
+  connection_options JSONB DEFAULT '{}',
+  is_read_only BOOLEAN DEFAULT true,
+  is_active BOOLEAN DEFAULT true,
+  last_tested_at TIMESTAMPTZ,
+  last_test_result BOOLEAN,
+  created_by UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(team_id, name)
 );
 
--- 환경변수 그룹
-CREATE TABLE env_variable_groups (
+-- 쿼리 실행 이력 (Sprint 9 준비)
+CREATE TABLE query_executions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  team_id UUID NOT NULL REFERENCES teams(id),
-  name VARCHAR(100) NOT NULL,
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 환경변수
-CREATE TABLE env_variables (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  group_id UUID NOT NULL REFERENCES env_variable_groups(id),
-  environment_id UUID NOT NULL REFERENCES environments(id),
-  key VARCHAR(200) NOT NULL,
-  value_vault_key VARCHAR(200),
-  value_plain TEXT,
-  is_secret BOOLEAN DEFAULT false,
-  description TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(group_id, environment_id, key)
+  connection_id UUID NOT NULL REFERENCES db_connections(id) ON DELETE CASCADE,
+  mapper_id UUID,
+  statement_id VARCHAR(200),
+  sql_query TEXT NOT NULL,
+  parameters JSONB,
+  result_row_count INTEGER,
+  execution_time_ms INTEGER,
+  error_message TEXT,
+  executed_by UUID NOT NULL REFERENCES auth.users(id),
+  executed_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-### 파일 구조 (추가)
+### 주요 기능
 
-```
-src/
-├── pages/
-│   └── EnvManager.tsx
-├── components/
-│   ├── mybatis/
-│   │   ├── ParameterForm.tsx
-│   │   ├── SqlPreview.tsx
-│   │   ├── QueryExecutor.tsx
-│   │   ├── ResultTable.tsx
-│   │   └── ExplainViewer.tsx
-│   └── env/
-│       ├── EnvironmentTabs.tsx
-│       ├── VariableGroupCard.tsx
-│       ├── VariableTable.tsx
-│       ├── VariableForm.tsx
-│       └── ImportExportDialog.tsx
-├── hooks/
-│   ├── use-query-execution.ts
-│   ├── use-environments.ts
-│   └── use-env-variables.ts
-└── utils/
-    ├── sqlParameterizer.ts
-    ├── envFileParser.ts
-    └── envFileExporter.ts
-
-supabase/functions/
-└── execute-query/index.ts
-```
+- **GitLab Webhook**: Edge Function이 GitLab 파이프라인 이벤트 수신, upsert로 중복 처리
+- **Prometheus 연동**: 미리 정의된 쿼리(CPU, 메모리, HTTP 요청 등), 시계열 차트 시각화
+- **Docker 상태**: 컨테이너 목록 조회, CPU/메모리 사용량, 상태 배지
+- **MyBatis 파서**: XML 파싱, 동적 SQL 태그(if, foreach, choose 등) 처리, 파라미터 추출
+- **DB 연결 관리**: PostgreSQL/MySQL/Oracle/MSSQL 지원, 팀 기반 연결 관리
 
 ---
 
-## Sprint 10: 환경변수 완성 + 코드 리뷰 체크리스트
+## Sprint 9: MyBatis 완성 (완료)
 
 ### 목표
 
-변경 이력 추적, 팀 공유, 코드 리뷰 MVP
+쿼리 실행/EXPLAIN 시각화, 프록시 서버 연동
 
 ### 구현 기능
 
 | 기능 | 설명 | 상태 |
 |------|------|------|
+| 파라미터 치환 | MyBatis 파라미터(#{}, ${}) → 실제 값 변환 | ✅ |
+| IF 조건 평가 | MyBatis `<if test="...">` 동적 조건 평가 | ✅ |
+| 쿼리 실행 | Supabase Edge Function + 프록시 서버 지원 | ✅ |
+| EXPLAIN 시각화 | 실행 계획 테이블 뷰 (전체 너비 표시) | ✅ |
+| 쿼리 이력 저장 | 실행 이력 DB 저장 + 히스토리 UI | ✅ |
+| 프록시 서버 | 내부망 DB 연결용 Express 프록시 서버 | ✅ |
+| 연결 테스트 | 클라우드/프록시 방식 연결 테스트 + 상태 저장 | ✅ |
+
+### 구현된 파일
+
+```
+server/                              # 프록시 서버 (내부망 DB 접속용)
+├── package.json
+├── tsconfig.json
+└── src/
+    └── index.ts                     # Express + pg/mysql2/oracledb/tedious
+
+src/
+├── pages/
+│   └── MybatisQueryTester.tsx       # 쿼리 테스터 페이지 (레이아웃 개선)
+├── components/
+│   └── mybatis/
+│       ├── DbConnectionDialog.tsx   # DB 연결 생성/수정 다이얼로그
+│       ├── MybatisFileUploader.tsx  # XML 파일 업로드
+│       ├── StatementList.tsx        # Statement 목록
+│       ├── ParameterPanel.tsx       # 파라미터 입력 UI
+│       ├── ResultTable.tsx          # 쿼리 결과 테이블
+│       ├── ExplainViewer.tsx        # EXPLAIN 결과 뷰어
+│       └── QueryHistoryList.tsx     # 실행 이력 목록
+├── hooks/
+│   ├── use-db-connections.ts        # DB 연결 CRUD + 테스트 (silent 옵션)
+│   ├── use-query-execution.ts       # 쿼리 실행 훅
+│   └── use-query-history.ts         # 실행 이력 조회 훅
+├── lib/
+│   └── supabase-fetch.ts            # saveQueryHistory 추가
+└── utils/
+    └── mybatisParser.ts             # XML 파서 + IF 조건 평가
+
+supabase/functions/
+├── execute-query/index.ts           # 쿼리 실행 Edge Function
+└── test-db-connection/index.ts      # 연결 테스트 Edge Function
+```
+
+### 주요 기능
+
+- **파라미터 치환**: `#{param}` → `$1`, `${param}` → 직접 삽입, 타입별 포맷팅
+- **IF 조건 평가**: `<if test="name != null">`, `<if test="status == 'active'">` 등 동적 SQL
+- **프록시 서버**: 내부망 DB 접속을 위한 로컬 Express 서버 (`npm run dev` on port 3001)
+- **연결 테스트**: 클라우드(Edge Function) / 프록시 서버 자동 감지, 테스트 결과 DB 저장
+- **EXPLAIN 시각화**: 쿼리 결과 없이 EXPLAIN만 실행 시 전체 너비로 표시
+- **쿼리 이력**: 프록시 모드에서도 실행 이력 자동 저장
+
+---
+
+## Sprint 10: 환경변수 관리
+
+### 목표
+
+환경변수 CRUD, .env 파일 가져오기/내보내기
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| 환경변수 CRUD | 환경별 변수 관리 (local/dev/prod) | 🔜 |
+| .env 가져오기 | 파일 업로드 → 파싱 → 저장 | 🔜 |
+| .env 내보내기 | 환경별 .env 파일 생성 다운로드 | 🔜 |
 | 감사 로그 | 환경변수 변경 이력 추적 | 🔜 |
 | 환경별 비교 | local/dev/prod 값 비교 뷰 | 🔜 |
 | 팀 공유 | 환경변수 그룹 팀원 공유 | 🔜 |
-| Spring Boot 체크리스트 | 기본 템플릿 제공 | 🔜 |
-| 리뷰 세션 관리 | 시작/완료, PR 연동 | 🔜 |
 
 ### 추가 Database Schema
 
@@ -815,22 +790,99 @@ src/
 
 ---
 
-## Sprint 11: 코드 리뷰 완성 + API 영향도 분석기
+## Sprint 11: 코드 리뷰 헬퍼
 
 ### 목표
 
-리뷰 통계, API 영향도 분석 MVP
+Spring Boot 코드 리뷰 체크리스트, 리뷰 세션 관리
 
 ### 구현 기능
 
 | 기능 | 설명 | 상태 |
 |------|------|------|
+| Spring Boot 체크리스트 | 기본 템플릿 제공 | 🔜 |
+| 리뷰 세션 관리 | 시작/완료, PR 연동 | 🔜 |
 | 리뷰 통계 | 팀/개인별 통계 대시보드 | 🔜 |
 | 커스텀 템플릿 | 체크리스트 템플릿 편집 | 🔜 |
+
+### 추가 Database Schema
+
+```sql
+-- 리뷰 템플릿
+CREATE TABLE review_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID REFERENCES teams(id),
+  name VARCHAR(200) NOT NULL,
+  category VARCHAR(50), -- 'spring-boot', 'react', 'security'
+  items JSONB NOT NULL,
+  is_system BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 리뷰 세션
+CREATE TABLE review_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  team_id UUID NOT NULL REFERENCES teams(id),
+  template_id UUID REFERENCES review_templates(id),
+  title VARCHAR(300) NOT NULL,
+  pr_url VARCHAR(500),
+  reviewer_id UUID NOT NULL REFERENCES auth.users(id),
+  status VARCHAR(20) DEFAULT 'in_progress',
+  started_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+-- 체크 결과
+CREATE TABLE review_checks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES review_sessions(id),
+  item_id VARCHAR(50) NOT NULL,
+  status VARCHAR(20) NOT NULL, -- 'passed', 'failed', 'skipped'
+  comment TEXT,
+  checked_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 파일 구조 (추가)
+
+```
+src/
+├── pages/
+│   └── CodeReviewHelper.tsx
+├── components/
+│   └── review/
+│       ├── TemplateSelector.tsx
+│       ├── ChecklistView.tsx
+│       ├── CheckItem.tsx
+│       ├── SessionSummary.tsx
+│       ├── ReviewStats.tsx
+│       ├── TemplateEditor.tsx
+│       └── StatsByCategory.tsx
+├── hooks/
+│   ├── use-review-templates.ts
+│   ├── use-review-sessions.ts
+│   └── use-review-stats.ts
+└── data/
+    └── springBootChecklist.ts
+```
+
+---
+
+## Sprint 12: API 영향도 분석
+
+### 목표
+
+API 엔드포인트 관리, 컨슈머 매핑, 영향도 시각화
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
 | API 수동 등록 | 엔드포인트 정보 입력 | 🔜 |
 | OpenAPI 가져오기 | swagger.json/openapi.yaml 파싱 | 🔜 |
 | 컨슈머 매핑 | API 사용처 연결 | 🔜 |
 | 영향도 그래프 | 변경 영향 시각화 | 🔜 |
+| 영향도 리포트 | 변경 시 영향받는 컨슈머 목록 | 🔜 |
 
 ### 추가 Database Schema
 
@@ -881,9 +933,6 @@ src/
 ├── pages/
 │   └── ApiImpactAnalyzer.tsx
 ├── components/
-│   ├── review/
-│   │   ├── TemplateEditor.tsx
-│   │   └── StatsByCategory.tsx
 │   └── api-impact/
 │       ├── EndpointRegistration.tsx
 │       ├── EndpointList.tsx
@@ -892,7 +941,6 @@ src/
 │       ├── ImpactReport.tsx
 │       └── OpenApiImporter.tsx
 ├── hooks/
-│   ├── use-review-stats.ts
 │   ├── use-api-endpoints.ts
 │   └── use-api-consumers.ts
 └── utils/
@@ -903,7 +951,7 @@ src/
 
 ---
 
-## Sprint 7-11 공통 작업
+## Sprint 7-12 공통 작업
 
 ### AppSidebar.tsx 메뉴 추가
 

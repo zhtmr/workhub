@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, CheckCircle2, XCircle, Info } from "lucide-react";
 import { createGitLabClient } from "@/utils/gitlabApi";
 import type { ProjectFormData } from "@/types/deployment";
@@ -49,6 +50,31 @@ export function ProjectRegistrationDialog({
   const [gitlabStatus, setGitlabStatus] = useState<ConnectionStatus>("idle");
   const [gitlabError, setGitlabError] = useState<string | null>(null);
   const [gitlabProjectName, setGitlabProjectName] = useState<string | null>(null);
+
+  // 토큰 변경 체크박스 상태 (편집 모드에서만 사용)
+  const [changeGitlabToken, setChangeGitlabToken] = useState(false);
+  const [changePrometheusToken, setChangePrometheusToken] = useState(false);
+
+  // 모달이 열릴 때 폼 데이터 초기화
+  useEffect(() => {
+    if (open) {
+      setFormData({
+        name: initialData?.name || "",
+        description: initialData?.description || "",
+        gitlab_url: initialData?.gitlab_url || "",
+        gitlab_project_id: initialData?.gitlab_project_id || "",
+        gitlab_api_token: initialData?.gitlab_api_token || "",
+        prometheus_endpoint: initialData?.prometheus_endpoint || "",
+        prometheus_auth_token: initialData?.prometheus_auth_token || "",
+        docker_host: initialData?.docker_host || "",
+      });
+      setGitlabStatus("idle");
+      setGitlabError(null);
+      setGitlabProjectName(null);
+      setChangeGitlabToken(false);
+      setChangePrometheusToken(false);
+    }
+  }, [open, initialData]);
 
   const handleChange = (field: keyof ProjectFormData, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -99,7 +125,17 @@ export function ProjectRegistrationDialog({
 
     setIsSubmitting(true);
     try {
-      await onSubmit(formData);
+      // 편집 모드에서 토큰 변경 체크가 안 되어 있으면 토큰 필드를 제외
+      const submitData = { ...formData };
+      if (isEditing) {
+        if (!changeGitlabToken) {
+          submitData.gitlab_api_token = "";
+        }
+        if (!changePrometheusToken) {
+          submitData.prometheus_auth_token = "";
+        }
+      }
+      await onSubmit(submitData);
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to submit project:", error);
@@ -178,14 +214,34 @@ export function ProjectRegistrationDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gitlab_api_token">API 토큰</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="gitlab_api_token">API 토큰</Label>
+                {isEditing && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="change_gitlab_token"
+                      checked={changeGitlabToken}
+                      onCheckedChange={(checked) => setChangeGitlabToken(!!checked)}
+                    />
+                    <Label htmlFor="change_gitlab_token" className="text-sm font-normal cursor-pointer">
+                      토큰 변경
+                    </Label>
+                  </div>
+                )}
+              </div>
               <Input
                 id="gitlab_api_token"
                 type="password"
                 value={formData.gitlab_api_token}
                 onChange={(e) => handleChange("gitlab_api_token", e.target.value)}
-                placeholder="glpat-xxxx..."
+                placeholder={isEditing && !changeGitlabToken ? "••••••••" : "glpat-xxxx..."}
+                disabled={isEditing && !changeGitlabToken}
               />
+              {isEditing && !changeGitlabToken && (
+                <p className="text-xs text-muted-foreground">
+                  토큰을 변경하려면 "토큰 변경"을 체크하세요
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -238,14 +294,34 @@ export function ProjectRegistrationDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="prometheus_auth_token">Prometheus 인증 토큰 (선택)</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="prometheus_auth_token">Prometheus 인증 토큰 (선택)</Label>
+                {isEditing && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="change_prometheus_token"
+                      checked={changePrometheusToken}
+                      onCheckedChange={(checked) => setChangePrometheusToken(!!checked)}
+                    />
+                    <Label htmlFor="change_prometheus_token" className="text-sm font-normal cursor-pointer">
+                      토큰 변경
+                    </Label>
+                  </div>
+                )}
+              </div>
               <Input
                 id="prometheus_auth_token"
                 type="password"
                 value={formData.prometheus_auth_token}
                 onChange={(e) => handleChange("prometheus_auth_token", e.target.value)}
-                placeholder="Bearer 토큰"
+                placeholder={isEditing && !changePrometheusToken ? "••••••••" : "Bearer 토큰"}
+                disabled={isEditing && !changePrometheusToken}
               />
+              {isEditing && !changePrometheusToken && (
+                <p className="text-xs text-muted-foreground">
+                  토큰을 변경하려면 "토큰 변경"을 체크하세요
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">

@@ -51,7 +51,7 @@ const toolsItems = [
 
 const devOpsItems = [
   { title: "배포 현황", url: "/deployment-dashboard", icon: Rocket, disabled: false },
-  { title: "MyBatis 테스터", url: "/mybatis-tester", icon: Database, disabled: true },
+  { title: "MyBatis 테스터", url: "/mybatis-tester", icon: Database, disabled: false },
   { title: "환경변수 관리", url: "/env-manager", icon: KeyRound, disabled: true },
   { title: "코드 리뷰 헬퍼", url: "/code-review", icon: ClipboardCheck, disabled: true },
   { title: "API 영향도 분석", url: "/api-impact", icon: GitBranch, disabled: true },

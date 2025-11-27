@@ -19,6 +19,7 @@ import History from "./pages/History";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import DeploymentDashboard from "./pages/DeploymentDashboard";
+import MybatisQueryTester from "./pages/MybatisQueryTester";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
                 <Route path="/history" element={<History />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/deployment-dashboard" element={<DeploymentDashboard />} />
+                <Route path="/mybatis-tester" element={<MybatisQueryTester />} />
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               </Route>
               <Route path="*" element={<NotFound />} />

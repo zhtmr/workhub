@@ -128,6 +128,77 @@ export interface PipelineEventRow {
   received_at: string;
 }
 
+// =====================================================
+// DB Connection Types
+// =====================================================
+export type DbType = "postgresql" | "mysql" | "oracle" | "mssql";
+
+export interface DbConnectionRow {
+  id: string;
+  team_id: string;
+  name: string;
+  description: string | null;
+  db_type: DbType;
+  host: string;
+  port: number;
+  database_name: string;
+  username: string;
+  password_encrypted: string | null;
+  ssl_mode: string;
+  connection_options: Record<string, unknown>;
+  is_read_only: boolean;
+  is_active: boolean;
+  last_tested_at: string | null;
+  last_test_result: boolean | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbConnectionInsert {
+  team_id: string;
+  name: string;
+  description?: string | null;
+  db_type?: DbType;
+  host: string;
+  port?: number;
+  database_name: string;
+  username: string;
+  password_encrypted?: string | null;
+  ssl_mode?: string;
+  connection_options?: Record<string, unknown>;
+  is_read_only?: boolean;
+  created_by?: string;
+}
+
+// =====================================================
+// Query Execution Types
+// =====================================================
+export interface QueryExecutionResult {
+  success: boolean;
+  rows?: Record<string, unknown>[];
+  rowCount?: number;
+  columns?: string[];
+  executionTimeMs?: number;
+  explainPlan?: unknown;
+  error?: string;
+  warning?: string;
+}
+
+export interface QueryExecutionRow {
+  id: string;
+  connection_id: string;
+  mapper_id: string | null;
+  statement_id: string | null;
+  sql_query: string;
+  parameters: Record<string, unknown> | null;
+  result_row_count: number | null;
+  execution_time_ms: number | null;
+  error_message: string | null;
+  executed_by: string;
+  executed_at: string;
+}
+
 export const supabaseFetch = {
   /**
    * Fetch all history entries for a user
@@ -594,6 +665,336 @@ export const supabaseFetch = {
       return { error: null };
     } catch (error) {
       return { error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  // =====================================================
+  // DB Connection APIs
+  // =====================================================
+
+  /**
+   * Fetch DB connections for a team
+   */
+  async getDbConnections(teamId: string, accessToken?: string): Promise<{ data: DbConnectionRow[] | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/db_connections?team_id=eq.${teamId}&order=name`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.message || 'Failed to fetch DB connections') };
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Create a DB connection
+   */
+  async createDbConnection(connection: DbConnectionInsert, accessToken?: string): Promise<{ data: DbConnectionRow | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/db_connections`,
+        {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(connection),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.message || 'Failed to create DB connection') };
+      }
+
+      const data = await response.json();
+      return { data: Array.isArray(data) ? data[0] : data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Update a DB connection
+   */
+  async updateDbConnection(id: string, updates: Partial<DbConnectionInsert>, accessToken?: string): Promise<{ data: DbConnectionRow | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/db_connections?id=eq.${id}`,
+        {
+          method: 'PATCH',
+          headers: {
+            ...headers,
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(updates),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.message || 'Failed to update DB connection') };
+      }
+
+      const data = await response.json();
+      return { data: Array.isArray(data) ? data[0] : data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Delete a DB connection
+   */
+  async deleteDbConnection(id: string, accessToken?: string): Promise<{ error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/db_connections?id=eq.${id}`,
+        {
+          method: 'DELETE',
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { error: new Error(errorData.message || 'Failed to delete DB connection') };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Test DB connection via Edge Function
+   */
+  async testDbConnection(id: string, accessToken?: string): Promise<{ data: { success: boolean; message: string } | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/test-db-connection`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ connectionId: id }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.error || 'Failed to test DB connection') };
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Execute SQL query via Edge Function
+   */
+  async executeQuery(
+    connectionId: string,
+    sql: string,
+    options?: {
+      parameters?: Record<string, unknown>;
+      explainOnly?: boolean;
+      statementId?: string;
+    },
+    accessToken?: string
+  ): Promise<{ data: QueryExecutionResult | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/execute-query`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            connectionId,
+            sql,
+            parameters: options?.parameters,
+            explainOnly: options?.explainOnly,
+            statementId: options?.statementId,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        return { data: null, error: new Error(data.error || 'Query execution failed') };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Execute SQL query via Proxy Server (for internal network DB)
+   */
+  async executeQueryViaProxy(
+    proxyUrl: string,
+    connection: {
+      db_type: 'postgresql' | 'mysql' | 'oracle' | 'mssql';
+      host: string;
+      port: number;
+      database_name: string;
+      username: string;
+      password: string;
+    },
+    sql: string,
+    options?: {
+      parameters?: Record<string, unknown>;
+      explainOnly?: boolean;
+    }
+  ): Promise<{ data: QueryExecutionResult | null; error: Error | null }> {
+    try {
+      const response = await fetch(
+        `${proxyUrl}/api/execute-query`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            connection,
+            sql,
+            parameters: options?.parameters,
+            explainOnly: options?.explainOnly,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        return { data: null, error: new Error(data.error || 'Query execution failed') };
+      }
+
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Test DB connection via Proxy Server (for internal network DB)
+   */
+  async testConnectionViaProxy(
+    proxyUrl: string,
+    connection: {
+      db_type: 'postgresql' | 'mysql' | 'oracle' | 'mssql';
+      host: string;
+      port: number;
+      database_name: string;
+      username: string;
+      password: string;
+    }
+  ): Promise<{ data: { success: boolean; message: string; serverVersion?: string } | null; error: Error | null }> {
+    try {
+      const response = await fetch(
+        `${proxyUrl}/api/test-connection`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ connection }),
+        }
+      );
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Get query execution history
+   */
+  async getQueryHistory(
+    connectionId: string,
+    limit: number = 20,
+    accessToken?: string
+  ): Promise<{ data: QueryExecutionRow[] | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/query_executions?connection_id=eq.${connectionId}&order=executed_at.desc&limit=${limit}`,
+        { headers }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.message || 'Failed to get query history') };
+      }
+
+      const data = await response.json();
+      return { data, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
+    }
+  },
+
+  /**
+   * Save query execution history (for proxy mode)
+   */
+  async saveQueryHistory(
+    execution: {
+      connection_id: string;
+      statement_id?: string | null;
+      sql_query: string;
+      parameters?: Record<string, unknown> | null;
+      result_row_count?: number | null;
+      execution_time_ms?: number | null;
+      error_message?: string | null;
+      executed_by: string;
+    },
+    accessToken?: string
+  ): Promise<{ data: QueryExecutionRow | null; error: Error | null }> {
+    try {
+      const headers = await getHeaders({ accessToken });
+      const response = await fetch(
+        `${supabaseUrl}/rest/v1/query_executions`,
+        {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify({
+            ...execution,
+            executed_at: new Date().toISOString(),
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { data: null, error: new Error(errorData.message || 'Failed to save query history') };
+      }
+
+      const data = await response.json();
+      return { data: data[0] || null, error: null };
+    } catch (error) {
+      return { data: null, error: error instanceof Error ? error : new Error('Unknown error') };
     }
   },
 };

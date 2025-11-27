@@ -1,0 +1,12 @@
+# Supabase Configuration
+
+[api]
+enabled = true
+
+[functions.gitlab-webhook]
+# GitLab Webhook은 외부에서 호출되므로 JWT 검증 비활성화
+verify_jwt = false
+
+[functions.execute-query]
+# 쿼리 실행은 인증된 사용자만 가능 (JWT 검증 활성화)
+verify_jwt = true

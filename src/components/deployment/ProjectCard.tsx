@@ -14,6 +14,7 @@ import {
   Trash2,
   ExternalLink,
   RefreshCw,
+  Webhook,
 } from "lucide-react";
 import { PipelineStatusBadge } from "./PipelineStatusBadge";
 import { formatDuration } from "@/utils/gitlabApi";
@@ -26,6 +27,7 @@ interface ProjectCardProps {
   onDelete?: (project: ProjectWithStatus) => void;
   onRefresh?: (project: ProjectWithStatus) => void;
   onClick?: (project: ProjectWithStatus) => void;
+  onWebhook?: (project: ProjectWithStatus) => void;
 }
 
 const statusColors = {
@@ -41,6 +43,7 @@ export function ProjectCard({
   onDelete,
   onRefresh,
   onClick,
+  onWebhook,
 }: ProjectCardProps) {
   const latestPipeline = project.latest_pipeline;
 
@@ -104,11 +107,20 @@ export function ProjectCard({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
+                  onWebhook?.(project);
+                }}
+              >
+                <Webhook className="w-4 h-4 mr-2" />
+                Webhook 설정
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
                   onEdit?.(project);
                 }}
               >
                 <Settings className="w-4 h-4 mr-2" />
-                설정
+                프로젝트 설정
               </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Rocket, Plus, Users, RefreshCw, Settings } from "lucide-react";
+import { Rocket, Plus, Users, RefreshCw, Settings, Activity, Container } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/providers/AuthProvider";
 import { useTeams } from "@/hooks/use-teams";
 import {
@@ -33,6 +34,9 @@ import {
   DeploymentStats,
   PipelineTimeline,
   TeamSettingsDialog,
+  WebhookSettings,
+  PrometheusMetricsGrid,
+  ContainerStatusGrid,
 } from "@/components/deployment";
 import type { ProjectWithStatus, ProjectFormData } from "@/types/deployment";
 import { toast } from "sonner";
@@ -71,6 +75,7 @@ const DeploymentDashboard = () => {
   const [showTeamSettings, setShowTeamSettings] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithStatus | null>(null);
   const [deletingProject, setDeletingProject] = useState<ProjectWithStatus | null>(null);
+  const [webhookProject, setWebhookProject] = useState<ProjectWithStatus | null>(null);
 
   // 선택된 팀 객체 찾기
   const selectedTeam = teams.find((t) => t.id === selectedTeamId) || null;
@@ -272,51 +277,88 @@ const DeploymentDashboard = () => {
                   onEdit={(p) => setEditingProject(p)}
                   onDelete={(p) => setDeletingProject(p)}
                   onRefresh={() => refetch()}
+                  onWebhook={(p) => setWebhookProject(p)}
                 />
               ))}
             </div>
           )}
         </div>
 
-        {/* Sidebar - Stats & Timeline */}
+        {/* Sidebar - Stats & Timeline with Tabs */}
         <div className="xl:col-span-2 space-y-6">
-          {selectedProjectId ? (
-            hasGitLabConfig ? (
-              pipelinesLoading ? (
-                <Card>
-                  <CardContent className="p-8 text-center">
-                    <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-muted-foreground" />
-                    <p className="text-muted-foreground">파이프라인 조회 중...</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <>
-                  <DeploymentStats stats={stats} />
-                  <PipelineTimeline
-                    events={events}
-                    maxHeight="500px"
-                    hasNextPage={hasNextPage}
-                    isFetchingNextPage={isFetchingNextPage}
-                    onLoadMore={() => fetchNextPage()}
-                  />
-                </>
-              )
-            ) : (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">GitLab 설정 필요</CardTitle>
-                </CardHeader>
-                <CardContent className="text-center py-8 text-muted-foreground">
-                  <Settings className="w-12 h-12 mx-auto mb-4 opacity-20" />
-                  <p>GitLab URL, 프로젝트 ID, API 토큰을</p>
-                  <p>설정하면 파이프라인을 조회할 수 있습니다</p>
-                </CardContent>
-              </Card>
-            )
+          {selectedProjectId && selectedProject ? (
+            <Tabs defaultValue="pipeline" className="w-full">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="pipeline" className="gap-1">
+                  <Rocket className="w-4 h-4" />
+                  <span className="hidden sm:inline">파이프라인</span>
+                </TabsTrigger>
+                <TabsTrigger value="metrics" className="gap-1">
+                  <Activity className="w-4 h-4" />
+                  <span className="hidden sm:inline">메트릭</span>
+                </TabsTrigger>
+                <TabsTrigger value="containers" className="gap-1">
+                  <Container className="w-4 h-4" />
+                  <span className="hidden sm:inline">컨테이너</span>
+                </TabsTrigger>
+              </TabsList>
+
+              {/* 파이프라인 탭 */}
+              <TabsContent value="pipeline" className="space-y-6 mt-4">
+                {hasGitLabConfig ? (
+                  pipelinesLoading ? (
+                    <Card>
+                      <CardContent className="p-8 text-center">
+                        <RefreshCw className="w-8 h-8 mx-auto mb-4 animate-spin text-muted-foreground" />
+                        <p className="text-muted-foreground">파이프라인 조회 중...</p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <>
+                      <DeploymentStats stats={stats} />
+                      <PipelineTimeline
+                        events={events}
+                        maxHeight="500px"
+                        hasNextPage={hasNextPage}
+                        isFetchingNextPage={isFetchingNextPage}
+                        onLoadMore={() => fetchNextPage()}
+                      />
+                    </>
+                  )
+                ) : (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">GitLab 설정 필요</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-center py-8 text-muted-foreground">
+                      <Settings className="w-12 h-12 mx-auto mb-4 opacity-20" />
+                      <p>GitLab URL, 프로젝트 ID, API 토큰을</p>
+                      <p>설정하면 파이프라인을 조회할 수 있습니다</p>
+                    </CardContent>
+                  </Card>
+                )}
+              </TabsContent>
+
+              {/* 메트릭 탭 */}
+              <TabsContent value="metrics" className="mt-4">
+                <PrometheusMetricsGrid
+                  project={selectedProject}
+                  demoMode={!selectedProject.prometheus_endpoint}
+                />
+              </TabsContent>
+
+              {/* 컨테이너 탭 */}
+              <TabsContent value="containers" className="mt-4">
+                <ContainerStatusGrid
+                  project={selectedProject}
+                  demoMode={!selectedProject.docker_host}
+                />
+              </TabsContent>
+            </Tabs>
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">파이프라인 상세</CardTitle>
+                <CardTitle className="text-lg">프로젝트 상세</CardTitle>
               </CardHeader>
               <CardContent className="text-center py-8 text-muted-foreground">
                 <Settings className="w-12 h-12 mx-auto mb-4 opacity-20" />
@@ -387,6 +429,22 @@ const DeploymentDashboard = () => {
         onOpenChange={setShowTeamSettings}
         team={selectedTeam}
       />
+
+      {/* Webhook Settings Dialog */}
+      {webhookProject && (
+        <WebhookSettings
+          open={!!webhookProject}
+          onOpenChange={(open) => !open && setWebhookProject(null)}
+          project={{
+            id: webhookProject.id,
+            name: webhookProject.name,
+            webhook_secret: webhookProject.webhook_secret,
+            gitlab_url: webhookProject.gitlab_url,
+            gitlab_project_id: webhookProject.gitlab_project_id,
+          }}
+          onSecretRegenerated={() => refetch()}
+        />
+      )}
     </div>
   );
 };
