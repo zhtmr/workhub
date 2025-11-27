@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { GitCommit, GitBranch } from "lucide-react";
+import { GitCommit, GitBranch, Loader2, ChevronDown } from "lucide-react";
 import { PipelineStatusBadge } from "./PipelineStatusBadge";
 import { formatDuration } from "@/utils/gitlabApi";
 import type { PipelineEvent } from "@/types/deployment";
@@ -9,12 +10,19 @@ interface PipelineTimelineProps {
   events: PipelineEvent[];
   maxHeight?: string;
   title?: string;
+  // 페이지네이션
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
 }
 
 export function PipelineTimeline({
   events,
   maxHeight = "400px",
   title = "파이프라인 이력",
+  hasNextPage = false,
+  isFetchingNextPage = false,
+  onLoadMore,
 }: PipelineTimelineProps) {
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -65,8 +73,11 @@ export function PipelineTimeline({
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{title}</CardTitle>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg">{title}</CardTitle>
+          <span className="text-sm text-muted-foreground">{events.length}개</span>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         <ScrollArea style={{ height: maxHeight }}>
@@ -77,7 +88,7 @@ export function PipelineTimeline({
 
               {/* Events */}
               <div className="space-y-4">
-                {events.map((event, index) => (
+                {events.map((event) => (
                   <div key={event.id} className="relative pl-8">
                     {/* Timeline dot */}
                     <div
@@ -143,6 +154,31 @@ export function PipelineTimeline({
                   </div>
                 ))}
               </div>
+
+              {/* Load More Button */}
+              {hasNextPage && onLoadMore && (
+                <div className="mt-4 pl-8">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={onLoadMore}
+                    disabled={isFetchingNextPage}
+                  >
+                    {isFetchingNextPage ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        불러오는 중...
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown className="w-4 h-4 mr-2" />
+                        더 보기
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </ScrollArea>

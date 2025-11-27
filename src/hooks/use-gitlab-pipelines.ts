@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { createGitLabClient } from "@/utils/gitlabApi";
 import type { DeploymentProject, GitLabPipeline, PipelineEvent, PipelineStats, PipelineStatus } from "@/types/deployment";
 
@@ -56,7 +56,7 @@ interface UseGitLabPipelinesOptions {
 }
 
 /**
- * GitLab API에서 파이프라인 목록을 가져오는 훅
+ * GitLab API에서 파이프라인 목록을 가져오는 훅 (페이지네이션 지원)
  */
 export function useGitLabPipelines(
   project: DeploymentProject | null,
@@ -65,7 +65,7 @@ export function useGitLabPipelines(
   const {
     enabled = true,
     refetchInterval = 30000,
-    perPage = 20,
+    perPage = 50,
   } = options;
 
   const hasGitLabConfig =
@@ -74,15 +74,18 @@ export function useGitLabPipelines(
     !!project?.gitlab_api_token_encrypted;
 
   const {
-    data: gitlabPipelines = [],
+    data,
     isLoading,
     error,
     refetch,
-  } = useQuery({
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["gitlab-pipelines", project?.id],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 1 }) => {
       if (!project || !hasGitLabConfig) {
-        return [];
+        return { pipelines: [], nextPage: null };
       }
 
       const client = createGitLabClient(
@@ -91,21 +94,33 @@ export function useGitLabPipelines(
         project.gitlab_api_token_encrypted!
       );
 
-      const { data, error } = await client.getPipelines({ per_page: perPage });
+      const { data, error } = await client.getPipelines({
+        per_page: perPage,
+        page: pageParam,
+      });
 
       if (error) {
         throw error;
       }
 
-      return data || [];
+      const pipelines = data || [];
+      // GitLab API는 perPage보다 적은 결과가 오면 마지막 페이지
+      const nextPage = pipelines.length === perPage ? pageParam + 1 : null;
+
+      return { pipelines, nextPage };
     },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.nextPage,
     enabled: enabled && hasGitLabConfig,
     refetchInterval: hasGitLabConfig ? refetchInterval : false,
     retry: 1,
   });
 
+  // 모든 페이지의 파이프라인 합치기
+  const allPipelines: GitLabPipeline[] = data?.pages.flatMap(page => page.pipelines) || [];
+
   // GitLab 파이프라인을 PipelineEvent 형식으로 변환
-  const events: PipelineEvent[] = gitlabPipelines.map((pipeline) =>
+  const events: PipelineEvent[] = allPipelines.map((pipeline) =>
     gitLabPipelineToPipelineEvent(pipeline, project?.id)
   );
 
@@ -113,12 +128,16 @@ export function useGitLabPipelines(
   const stats = calculatePipelineStats(events);
 
   return {
-    pipelines: gitlabPipelines,
+    pipelines: allPipelines,
     events,
     stats,
     isLoading,
     error,
     refetch,
     hasGitLabConfig,
+    // 페이지네이션
+    fetchNextPage,
+    hasNextPage: hasNextPage ?? false,
+    isFetchingNextPage,
   };
 }

@@ -55,7 +55,15 @@ const DeploymentDashboard = () => {
   const selectedProject = projects.find((p) => p.id === selectedProjectId) || null;
 
   // GitLab API에서 파이프라인 데이터 조회
-  const { events, stats, isLoading: pipelinesLoading, hasGitLabConfig } = useGitLabPipelines(selectedProject);
+  const {
+    events,
+    stats,
+    isLoading: pipelinesLoading,
+    hasGitLabConfig,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useGitLabPipelines(selectedProject);
 
   // Dialog states
   const [showProjectDialog, setShowProjectDialog] = useState(false);
@@ -268,7 +276,13 @@ const DeploymentDashboard = () => {
               ) : (
                 <>
                   <DeploymentStats stats={stats} />
-                  <PipelineTimeline events={events} maxHeight="500px" />
+                  <PipelineTimeline
+                    events={events}
+                    maxHeight="500px"
+                    hasNextPage={hasNextPage}
+                    isFetchingNextPage={isFetchingNextPage}
+                    onLoadMore={() => fetchNextPage()}
+                  />
                 </>
               )
             ) : (
