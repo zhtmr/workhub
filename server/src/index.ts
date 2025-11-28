@@ -7,6 +7,7 @@ import express from 'express';
 import cors from 'cors';
 import { queryRouter } from './routes/query';
 import { connectionRouter } from './routes/connection';
+import { dockerProxyRouter } from './routes/docker-proxy';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -27,6 +28,7 @@ app.get('/health', (req, res) => {
 // Routes
 app.use('/api', queryRouter);
 app.use('/api', connectionRouter);
+app.use('/api', dockerProxyRouter);
 
 // Error handler
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

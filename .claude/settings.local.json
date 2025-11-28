@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(cat:*)",
+      "Bash(npm ls:*)"
+    ]
+  },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "excel"

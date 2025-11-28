@@ -1,6 +1,8 @@
 // Docker Engine API Client
 // Sprint 8: 컨테이너 상태 모니터링
 
+import { isElectronEnvironment, getEmbeddedProxyUrl } from "@/lib/electron-bridge";
+
 export interface DockerConfig {
   host: string; // tcp://localhost:2375 또는 프록시 URL
 }
@@ -83,6 +85,8 @@ export interface ContainerMetrics {
 
 class DockerClient {
   private config: DockerConfig;
+  private proxyUrl: string | null = null;
+  private proxyInitialized: boolean = false;
 
   constructor(config: DockerConfig) {
     this.config = config;
@@ -106,7 +110,58 @@ class DockerClient {
     return host.replace(/\/$/, "");
   }
 
+  /**
+   * Electron 환경에서 프록시 URL 초기화
+   */
+  private async initProxy(): Promise<void> {
+    if (this.proxyInitialized) return;
+
+    if (isElectronEnvironment()) {
+      this.proxyUrl = await getEmbeddedProxyUrl();
+    }
+    this.proxyInitialized = true;
+  }
+
+  /**
+   * Electron 환경에서는 프록시를 통해 요청, 그 외에는 직접 요청
+   */
   private async fetch(path: string): Promise<Response> {
+    await this.initProxy();
+
+    // Electron 환경: 프록시 서버를 통해 요청
+    if (this.proxyUrl) {
+      const response = await fetch(`${this.proxyUrl}/api/docker/proxy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          host: this.config.host,
+          path: path,
+          method: "GET",
+        }),
+      });
+
+      // 프록시 응답을 원래 Docker API 응답처럼 변환
+      const result = await response.json();
+
+      if (!result.success) {
+        // 에러 응답 생성
+        return new Response(JSON.stringify({ message: result.error }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      // 성공 응답 생성
+      return new Response(JSON.stringify(result.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 일반 웹 환경: 직접 요청
     const baseUrl = this.getBaseUrl();
     if (!baseUrl) {
       throw new Error("Invalid Docker host configuration");

@@ -4,11 +4,13 @@
  */
 
 import type { GitLabPipeline, GitLabJob } from "@/types/deployment";
+import { isElectronEnvironment, getEmbeddedProxyUrl } from "@/lib/electron-bridge";
 
 interface GitLabConfig {
   baseUrl: string;
   projectId: string;
   privateToken: string;
+  proxyUrl?: string; // 외부 프록시 서버 URL (선택)
 }
 
 interface PipelineListParams {
@@ -25,6 +27,8 @@ interface ApiResponse<T> {
 
 export class GitLabClient {
   private config: GitLabConfig;
+  private proxyUrl: string | null = null;
+  private proxyInitialized: boolean = false;
 
   constructor(config: GitLabConfig) {
     // Remove trailing slash from baseUrl
@@ -34,11 +38,90 @@ export class GitLabClient {
     };
   }
 
+  /**
+   * 프록시 URL 초기화
+   * 우선순위: 1. 설정된 proxyUrl, 2. Electron 내장 프록시, 3. 환경변수
+   */
+  private async initProxy(): Promise<void> {
+    if (this.proxyInitialized) return;
+
+    // 1. 명시적으로 설정된 프록시 URL
+    if (this.config.proxyUrl) {
+      this.proxyUrl = this.config.proxyUrl;
+    }
+    // 2. Electron 환경: 내장 프록시 서버
+    else if (isElectronEnvironment()) {
+      this.proxyUrl = await getEmbeddedProxyUrl();
+    }
+    // 3. 환경 변수에서 프록시 URL 가져오기
+    else if (import.meta.env.VITE_PROXY_URL) {
+      this.proxyUrl = import.meta.env.VITE_PROXY_URL;
+    }
+    // 4. HTTP URL인 경우 프록시 필요 여부 체크
+    else if (this.config.baseUrl.startsWith("http://")) {
+      // HTTPS 페이지에서 HTTP 요청은 차단될 수 있음
+      if (typeof window !== "undefined" && window.location.protocol === "https:") {
+        console.warn(
+          "[GitLabClient] HTTP GitLab URL detected on HTTPS page. " +
+          "Mixed content may be blocked. Consider using a proxy server."
+        );
+      }
+    }
+
+    this.proxyInitialized = true;
+  }
+
+  /**
+   * 프록시 사용 여부 확인
+   */
+  private shouldUseProxy(): boolean {
+    // 프록시 URL이 있으면 사용
+    if (this.proxyUrl) return true;
+
+    // HTTPS 페이지에서 HTTP GitLab URL인 경우 프록시 필요
+    if (typeof window !== "undefined" &&
+        window.location.protocol === "https:" &&
+        this.config.baseUrl.startsWith("http://")) {
+      return true;
+    }
+
+    return false;
+  }
+
   private async request<T>(
     endpoint: string,
     options?: RequestInit
   ): Promise<ApiResponse<T>> {
+    await this.initProxy();
+
     try {
+      // 프록시를 통한 요청
+      if (this.shouldUseProxy() && this.proxyUrl) {
+        const response = await fetch(`${this.proxyUrl}/api/gitlab/proxy`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            baseUrl: this.config.baseUrl,
+            endpoint: endpoint,
+            method: options?.method || "GET",
+            privateToken: this.config.privateToken,
+            body: options?.body ? JSON.parse(options.body as string) : undefined,
+          }),
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+          return { data: null, error: new Error(result.error || "Unknown error") };
+        }
+
+        return { data: result.data, error: null };
+      }
+
+      // 직접 요청
       const url = `${this.config.baseUrl}/api/v4${endpoint}`;
       const response = await fetch(url, {
         ...options,
@@ -150,12 +233,14 @@ export class GitLabClient {
 export function createGitLabClient(
   gitlabUrl: string,
   projectId: string,
-  apiToken: string
+  apiToken: string,
+  proxyUrl?: string
 ): GitLabClient {
   return new GitLabClient({
     baseUrl: gitlabUrl,
     projectId,
     privateToken: apiToken,
+    proxyUrl,
   });
 }
 

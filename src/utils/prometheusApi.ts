@@ -1,6 +1,8 @@
 // Prometheus API Client
 // Sprint 8: Prometheus 메트릭 조회
 
+import { isElectronEnvironment, getEmbeddedProxyUrl } from "@/lib/electron-bridge";
+
 export interface PrometheusConfig {
   endpoint: string;
   authToken?: string;
@@ -63,12 +65,61 @@ export type PredefinedQuery = keyof typeof PREDEFINED_QUERIES;
 
 class PrometheusClient {
   private config: PrometheusConfig;
+  private proxyUrl: string | null = null;
+  private proxyInitialized: boolean = false;
 
   constructor(config: PrometheusConfig) {
     this.config = config;
   }
 
+  /**
+   * Electron 환경에서 프록시 URL 초기화
+   */
+  private async initProxy(): Promise<void> {
+    if (this.proxyInitialized) return;
+
+    if (isElectronEnvironment()) {
+      this.proxyUrl = await getEmbeddedProxyUrl();
+    }
+    this.proxyInitialized = true;
+  }
+
   private async fetch(path: string, params: Record<string, string> = {}): Promise<Response> {
+    await this.initProxy();
+
+    // Electron 환경: 프록시 서버를 통해 요청
+    if (this.proxyUrl) {
+      const response = await fetch(`${this.proxyUrl}/api/prometheus/proxy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          endpoint: this.config.endpoint,
+          path: path,
+          params: params,
+          authToken: this.config.authToken,
+        }),
+      });
+
+      // 프록시 응답을 원래 Prometheus API 응답처럼 변환
+      const result = await response.json();
+
+      if (!result.success) {
+        return new Response(JSON.stringify({ status: "error", error: result.error }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify(result.data), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // 일반 웹 환경: 직접 요청
     const url = new URL(path, this.config.endpoint);
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.set(key, value);
