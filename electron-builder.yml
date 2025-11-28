@@ -9,16 +9,28 @@ directories:
   output: release
   buildResources: build
 
-# 포함할 파일
+# 포함할 파일 (서버는 번들에 포함되므로 node_modules 불필요)
 files:
   - dist/**/*
   - dist-electron/**/*
   - electron/preload.cjs
-  - "!**/*.map"
-  - "!**/node_modules/.cache/**"
+  # node_modules 명시적 제외! 서버 의존성은 server.cjs에 번들됨
+  - "!node_modules"
+  - "!**/node_modules"
+  - "!electron/**/*"
+  - "!src/**/*"
+  - "!public/**/*"
+  - "!*.md"
+  - "!*.yml"
+  - "!*.json"
+  - "!tsconfig*.json"
+  - electron/preload.cjs
 
-# asar 비활성화 (네이티브 모듈 문제 방지)
-asar: false
+# asar 활성화 (빠른 로딩, 작은 설치 크기)
+asar: true
+asarUnpack:
+  # 서버 파일은 spawn으로 실행해야 하므로 언팩
+  - dist-electron/server.cjs
 
 # Windows 설정
 win:
@@ -30,11 +42,10 @@ win:
   artifactName: ${productName}-Setup-${version}.${ext}
   signAndEditExecutable: false
 
-# NSIS 인스톨러 설정
+# NSIS 인스톨러 설정 (원클릭 설치로 빠른 설치)
 nsis:
-  oneClick: false
+  oneClick: true
   perMachine: false
-  allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: WorkHub

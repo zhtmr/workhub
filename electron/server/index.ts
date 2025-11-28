@@ -634,3 +634,30 @@ export async function stopProxyServer(): Promise<void> {
 export function getProxyPort(): number | null {
   return currentPort;
 }
+
+// ============================================================
+// Auto-start when running as child process
+// ============================================================
+
+// 자식 프로세스로 실행된 경우 (process.send 존재) 자동 시작
+if (process.send) {
+  startProxyServer()
+    .then((port) => {
+      // 부모 프로세스에 준비 완료 알림
+      process.send!({ type: 'ready', port });
+      console.log(`[ProxyServer] IPC ready message sent, port: ${port}`);
+    })
+    .catch((error) => {
+      console.error('[ProxyServer] Failed to start:', error);
+      process.send!({ type: 'error', error: (error as Error).message });
+      process.exit(1);
+    });
+
+  // 부모 프로세스로부터 종료 신호 수신
+  process.on('message', (msg: { type: string }) => {
+    if (msg.type === 'shutdown') {
+      console.log('[ProxyServer] Shutdown signal received');
+      stopProxyServer().then(() => process.exit(0));
+    }
+  });
+}

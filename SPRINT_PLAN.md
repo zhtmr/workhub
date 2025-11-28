@@ -713,21 +713,28 @@ Electron 앱으로 통합하면 VPN 연결 후 앱 더블클릭만으로 내부�
 
 | 기능 | 설명 | 상태 |
 |------|------|------|
-| Electron 메인 프로세스 | BrowserWindow + 내장 프록시 서버 자동 시작 | ✅ |
-| 내장 프록시 서버 | Express 기반, PostgreSQL/MySQL/MSSQL 지원 | ✅ |
-| IPC 통신 | preload 스크립트로 프록시 포트 조회 | ✅ |
+| Electron 메인 프로세스 | BrowserWindow + 프록시 서버 자동 시작 | ✅ |
+| 프록시 서버 분리 | 별도 프로세스(spawn)로 서버 실행 | ✅ |
+| 서버 번들링 | esbuild CJS 번들 (DB 드라이버 포함, 4MB) | ✅ |
+| IPC 통신 | preload + process.send로 포트 조회 | ✅ |
 | 자동 환경 감지 | Electron 환경이면 내장 프록시 자동 사용 | ✅ |
 | HashRouter 지원 | file:// 프로토콜 호환을 위한 라우터 전환 | ✅ |
-| Windows 빌드 | NSIS 인스톨러로 .exe 배포 | ✅ |
+| Windows 빌드 | NSIS 원클릭 인스톨러 (.exe) | ✅ |
+| 빌드 최적화 | node_modules 제외, asar 압축 | ✅ |
 
 ### 구현된 파일
 
 ```
 electron/                           # Electron 관련 파일
-├── main.ts                         # 메인 프로세스 (ESM)
+├── main.ts                         # 메인 프로세스 (spawn으로 서버 실행)
 ├── preload.cjs                     # IPC 브릿지 (CommonJS)
+├── esbuild.config.mjs              # 서버 번들 설정 (CJS 출력)
+├── server.d.ts                     # 서버 타입 선언
 └── server/
-    └── index.ts                    # 내장 프록시 서버
+    └── index.ts                    # 프록시 서버 (IPC 메시지 지원)
+
+dist-electron/
+└── server.cjs                      # 번들된 서버 파일 (~4MB)
 
 src/
 ├── lib/
@@ -736,7 +743,7 @@ src/
 └── App.tsx                         # HashRouter 조건부 사용
 
 tsconfig.electron.json              # Electron TypeScript 설정
-electron-builder.yml                # 빌드 설정
+electron-builder.yml                # 빌드 설정 (asar, node_modules 제외)
 ```
 
 ### 아키텍처
@@ -744,19 +751,33 @@ electron-builder.yml                # 빌드 설정
 ```
 [Electron 앱]
 ├── Main Process (Node.js)
-│   ├── Express 프록시 서버 (내장, 자동 시작)
-│   └── DB 드라이버 (pg, mysql2, mssql)
+│   └── spawn(process.execPath, ['server.cjs'])
+│       └── 별도 프로세스로 프록시 서버 실행
+│
+├── Server Process (ELECTRON_RUN_AS_NODE)
+│   ├── Express 프록시 서버 (번들된 CJS)
+│   ├── DB 드라이버 (pg, mysql2, mssql 번들 포함)
+│   └── IPC 메시지로 포트 전달
 │
 └── Renderer Process (Chromium)
     └── React 프론트엔드 (기존 코드 재사용)
 ```
+
+### 빌드 최적화 결과
+
+| 항목 | 최적화 전 | 최적화 후 | 개선 |
+|------|----------|----------|------|
+| 설치 파일 | 117MB | **81MB** | -31% |
+| 압축 해제 크기 | 445MB | **280MB** | -37% |
+| app.asar | 288MB | **8MB** | -97% |
+| 설치 시간 | 10분+ | **1-2분** | -80% |
 
 ### 배포 전략
 
 | 버전 | 용도 | DB 접근 방식 |
 |------|------|-------------|
 | **웹 (Vercel)** | 공개 DB 접근 | Supabase Edge Function |
-| **Electron** | 내부망 DB 접근 | 내장 프록시 서버 |
+| **Electron** | 내부망 DB 접근 | 내장 프록시 서버 (별도 프로세스) |
 
 ### 사용 방법
 
@@ -768,12 +789,12 @@ npm run electron:dev
 **프로덕션 빌드:**
 ```bash
 npm run electron:build
-# 결과: release/WorkHub-Setup-{version}.exe (~119MB)
+# 결과: release/WorkHub-Setup-{version}.exe (~81MB)
 ```
 
 **사용자:**
 1. VPN으로 회사 내부망 연결
-2. WorkHub.exe 실행 (더블클릭)
+2. WorkHub.exe 실행 (더블클릭, 원클릭 설치)
 3. MyBatis Query Tester에서 내부망 DB 연결 (프록시 설정 불필요)
 4. 쿼리 실행
 
