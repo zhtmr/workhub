@@ -27,3 +27,8 @@ dist-ssr
 # Claude Code MCP settings
 .mcp.json
 .claude/
+
+# Electron
+dist-electron
+release
+.cache

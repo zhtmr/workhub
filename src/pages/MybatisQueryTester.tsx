@@ -84,8 +84,10 @@ import {
   clearProxyUrl,
   isProxyMode,
   checkProxyHealth,
+  isElectronEnvironment,
   type ProxyConnectionInfo,
 } from "@/lib/proxy-config";
+import { getEmbeddedProxyUrl } from "@/lib/electron-bridge";
 import { supabaseFetch, type QueryExecutionResult } from "@/lib/supabase-fetch";
 import {
   Dialog,
@@ -159,17 +161,35 @@ const MybatisQueryTester = () => {
     }
   }, [teams, selectedTeamId]);
 
-  // Initialize proxy state
+  // Initialize proxy state (Electron 환경 자동 감지)
   useEffect(() => {
-    const savedUrl = getProxyUrl();
-    if (savedUrl) {
-      setProxyUrlInput(savedUrl);
-      setProxyEnabled(true);
-      // Check health on load
-      checkProxyHealth(savedUrl).then(({ healthy }) => {
-        setProxyHealthy(healthy);
-      });
-    }
+    const initProxy = async () => {
+      // Electron 환경이면 내장 프록시 자동 사용
+      if (isElectronEnvironment()) {
+        const embeddedUrl = await getEmbeddedProxyUrl();
+        if (embeddedUrl) {
+          setProxyUrlInput(embeddedUrl);
+          setProxyEnabled(true);
+          // 내장 프록시 헬스 체크
+          checkProxyHealth(embeddedUrl).then(({ healthy }) => {
+            setProxyHealthy(healthy);
+          });
+          return;
+        }
+      }
+
+      // 일반 웹 환경: localStorage에서 프록시 URL 로드
+      const savedUrl = getProxyUrl();
+      if (savedUrl) {
+        setProxyUrlInput(savedUrl);
+        setProxyEnabled(true);
+        checkProxyHealth(savedUrl).then(({ healthy }) => {
+          setProxyHealthy(healthy);
+        });
+      }
+    };
+
+    initProxy();
   }, []);
 
   // Connection handlers
@@ -214,8 +234,11 @@ const MybatisQueryTester = () => {
       // 내부망/로컬 IP 체크
       const { isPrivate, reason } = isPrivateOrLocalHost(connection.host);
       if (isPrivate) {
-        // 프록시 모드가 활성화되어 있으면 프록시를 통해 테스트
-        const proxyUrl = getProxyUrl();
+        // Electron 환경이면 내장 프록시 URL 가져오기, 아니면 저장된 URL 사용
+        let proxyUrl = isElectronEnvironment()
+          ? await getEmbeddedProxyUrl()
+          : getProxyUrl();
+
         if (proxyUrl && proxyEnabled) {
           toast.info("프록시 서버를 통해 연결 테스트 중...");
           const proxyConnection: ProxyConnectionInfo = {
@@ -410,8 +433,11 @@ const MybatisQueryTester = () => {
     if (selectedConnection) {
       const { isPrivate, reason } = isPrivateOrLocalHost(selectedConnection.host);
       if (isPrivate) {
-        // 프록시 모드가 활성화되어 있으면 프록시를 통해 실행
-        const proxyUrl = getProxyUrl();
+        // Electron 환경이면 내장 프록시 URL 가져오기, 아니면 저장된 URL 사용
+        const proxyUrl = isElectronEnvironment()
+          ? await getEmbeddedProxyUrl()
+          : getProxyUrl();
+
         if (proxyUrl && proxyEnabled) {
           setIsProxyExecuting(true);
           setProxyResult(null);
@@ -493,8 +519,11 @@ const MybatisQueryTester = () => {
     if (selectedConnection) {
       const { isPrivate, reason } = isPrivateOrLocalHost(selectedConnection.host);
       if (isPrivate) {
-        // 프록시 모드가 활성화되어 있으면 프록시를 통해 실행
-        const proxyUrl = getProxyUrl();
+        // Electron 환경이면 내장 프록시 URL 가져오기, 아니면 저장된 URL 사용
+        const proxyUrl = isElectronEnvironment()
+          ? await getEmbeddedProxyUrl()
+          : getProxyUrl();
+
         if (proxyUrl && proxyEnabled) {
           setIsProxyExecuting(true);
           setProxyResult(null);

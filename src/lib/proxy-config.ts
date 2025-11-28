@@ -1,7 +1,10 @@
 /**
  * 프록시 서버 설정 관리
  * localStorage에 프록시 URL을 저장하고 관리
+ * Electron 환경에서는 자동으로 내장 프록시 사용
  */
+
+import { isElectronEnvironment, getEmbeddedProxyUrl, getEmbeddedProxyStatus } from './electron-bridge';
 
 const PROXY_URL_KEY = 'workhub_proxy_url';
 
@@ -159,3 +162,63 @@ export async function testConnectionViaProxy(
     return { success: false, message: `프록시 요청 실패: ${err.message}` };
   }
 }
+
+// ============================================================
+// Electron 환경 자동 감지 함수들
+// ============================================================
+
+/**
+ * 프록시 URL 가져오기 (Electron 우선)
+ * Electron 환경이면 내장 프록시 자동 사용
+ */
+export async function getProxyUrlAuto(): Promise<string | null> {
+  // Electron 환경이면 내장 프록시 자동 사용
+  if (isElectronEnvironment()) {
+    const embeddedUrl = await getEmbeddedProxyUrl();
+    if (embeddedUrl) {
+      return embeddedUrl;
+    }
+  }
+
+  // 수동 설정된 URL 사용
+  return getProxyUrl();
+}
+
+/**
+ * 프록시 모드인지 확인 (Electron 포함)
+ */
+export async function isProxyModeAuto(): Promise<boolean> {
+  if (isElectronEnvironment()) {
+    const embeddedUrl = await getEmbeddedProxyUrl();
+    if (embeddedUrl) {
+      return true;
+    }
+  }
+  return isProxyMode();
+}
+
+/**
+ * 프록시 서버 상태 확인 (Electron 포함)
+ */
+export async function checkProxyHealthAuto(): Promise<{
+  healthy: boolean;
+  message: string;
+  embedded?: boolean;
+}> {
+  // Electron 환경이면 내장 프록시 확인
+  if (isElectronEnvironment()) {
+    const status = await getEmbeddedProxyStatus();
+    if (status.running && status.url) {
+      const health = await checkProxyHealth(status.url);
+      return { ...health, embedded: true };
+    }
+  }
+
+  // 수동 설정된 프록시 확인
+  return checkProxyHealth();
+}
+
+/**
+ * Electron 환경 여부 재노출 (편의성)
+ */
+export { isElectronEnvironment } from './electron-bridge';

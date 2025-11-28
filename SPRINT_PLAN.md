@@ -1,6 +1,6 @@
 # WorkHub 남은 스프린트 구현 계획
 
-> 마지막 업데이트: 2025-11-27 Sprint 9 완료 (쿼리 실행, EXPLAIN 시각화, 프록시 서버, 쿼리 이력)
+> 마지막 업데이트: 2025-11-28 Sprint 9.5 완료 (Electron 데스크톱 앱)
 
 ## 프로젝트 현황
 
@@ -24,6 +24,7 @@
 | Sprint 7 | ✅ 완료 | 팀 인프라 + 배포 대시보드 | 팀/조직, GitLab CI/CD, 대시보드 MVP |
 | Sprint 8 | ✅ 완료 | 배포 완성 + MyBatis 기초 | Webhook, Prometheus, Docker, XML 파서, DB 연결 |
 | Sprint 9 | ✅ 완료 | MyBatis 완성 | 쿼리 실행, EXPLAIN 시각화, 프록시 서버, 쿼리 이력 |
+| Sprint 9.5 | ✅ 완료 | Electron 데스크톱 앱 | 내장 프록시 서버, VPN 내부망 DB 접근, Windows .exe 배포 |
 | Sprint 10 | 🔜 예정 | 환경변수 관리 | 환경변수 CRUD, .env 가져오기/내보내기, 감사 로그 |
 | Sprint 11 | 🔜 예정 | 코드 리뷰 헬퍼 | Spring Boot 체크리스트, 리뷰 세션 관리, 통계 |
 | Sprint 12 | 🔜 예정 | API 영향도 분석 | OpenAPI, 컨슈머 매핑, 영향도 그래프 |
@@ -694,6 +695,87 @@ supabase/functions/
 - **연결 테스트**: 클라우드(Edge Function) / 프록시 서버 자동 감지, 테스트 결과 DB 저장
 - **EXPLAIN 시각화**: 쿼리 결과 없이 EXPLAIN만 실행 시 전체 너비로 표시
 - **쿼리 이력**: 프록시 모드에서도 실행 이력 자동 저장
+
+---
+
+## Sprint 9.5: Electron 데스크톱 앱 (완료)
+
+### 목표
+
+VPN 연결 후 앱 실행만으로 내부망 DB에 접근할 수 있도록 프론트엔드 + 프록시 서버를 Electron 데스크톱 앱으로 통합
+
+### 배경
+
+기존 프록시 서버(server/)는 별도로 실행해야 했고, 사용자가 내부망에 있어야만 접근 가능했음.
+Electron 앱으로 통합하면 VPN 연결 후 앱 더블클릭만으로 내부망 DB 접근 가능.
+
+### 구현 기능
+
+| 기능 | 설명 | 상태 |
+|------|------|------|
+| Electron 메인 프로세스 | BrowserWindow + 내장 프록시 서버 자동 시작 | ✅ |
+| 내장 프록시 서버 | Express 기반, PostgreSQL/MySQL/MSSQL 지원 | ✅ |
+| IPC 통신 | preload 스크립트로 프록시 포트 조회 | ✅ |
+| 자동 환경 감지 | Electron 환경이면 내장 프록시 자동 사용 | ✅ |
+| HashRouter 지원 | file:// 프로토콜 호환을 위한 라우터 전환 | ✅ |
+| Windows 빌드 | NSIS 인스톨러로 .exe 배포 | ✅ |
+
+### 구현된 파일
+
+```
+electron/                           # Electron 관련 파일
+├── main.ts                         # 메인 프로세스 (ESM)
+├── preload.cjs                     # IPC 브릿지 (CommonJS)
+└── server/
+    └── index.ts                    # 내장 프록시 서버
+
+src/
+├── lib/
+│   ├── electron-bridge.ts          # Electron 환경 감지 유틸
+│   └── proxy-config.ts             # Electron 자동 프록시 함수 추가
+└── App.tsx                         # HashRouter 조건부 사용
+
+tsconfig.electron.json              # Electron TypeScript 설정
+electron-builder.yml                # 빌드 설정
+```
+
+### 아키텍처
+
+```
+[Electron 앱]
+├── Main Process (Node.js)
+│   ├── Express 프록시 서버 (내장, 자동 시작)
+│   └── DB 드라이버 (pg, mysql2, mssql)
+│
+└── Renderer Process (Chromium)
+    └── React 프론트엔드 (기존 코드 재사용)
+```
+
+### 배포 전략
+
+| 버전 | 용도 | DB 접근 방식 |
+|------|------|-------------|
+| **웹 (Vercel)** | 공개 DB 접근 | Supabase Edge Function |
+| **Electron** | 내부망 DB 접근 | 내장 프록시 서버 |
+
+### 사용 방법
+
+**개발 모드:**
+```bash
+npm run electron:dev
+```
+
+**프로덕션 빌드:**
+```bash
+npm run electron:build
+# 결과: release/WorkHub-Setup-{version}.exe (~119MB)
+```
+
+**사용자:**
+1. VPN으로 회사 내부망 연결
+2. WorkHub.exe 실행 (더블클릭)
+3. MyBatis Query Tester에서 내부망 DB 연결 (프록시 설정 불필요)
+4. 쿼리 실행
 
 ---
 

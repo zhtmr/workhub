@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { Layout } from "./components/layout/Layout";
@@ -23,6 +23,10 @@ import MybatisQueryTester from "./pages/MybatisQueryTester";
 
 const queryClient = new QueryClient();
 
+// Electron 환경에서는 HashRouter 사용 (file:// 프로토콜 호환)
+const isElectron = typeof window !== 'undefined' && !!(window as { electronAPI?: unknown }).electronAPI;
+const Router = isElectron ? HashRouter : BrowserRouter;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
@@ -30,7 +34,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
+          <Router>
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route element={<Layout />}>
@@ -50,7 +54,7 @@ const App = () => (
               </Route>
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </BrowserRouter>
+          </Router>
         </TooltipProvider>
       </AuthProvider>
     </ThemeProvider>

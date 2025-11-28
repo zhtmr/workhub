@@ -1,0 +1,68 @@
+# electron-builder configuration
+# https://www.electron.build/configuration/configuration
+
+appId: com.workhub.desktop
+productName: WorkHub
+copyright: Copyright 2024
+
+directories:
+  output: release
+  buildResources: build
+
+# 포함할 파일
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - electron/preload.cjs
+  - "!**/*.map"
+  - "!**/node_modules/.cache/**"
+
+# asar 비활성화 (네이티브 모듈 문제 방지)
+asar: false
+
+# Windows 설정
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: public/favicon.ico
+  artifactName: ${productName}-Setup-${version}.${ext}
+  signAndEditExecutable: false
+
+# NSIS 인스톨러 설정
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: WorkHub
+  installerIcon: public/favicon.ico
+  uninstallerIcon: public/favicon.ico
+
+# macOS 설정 (추후 지원)
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: public/favicon.icns
+  artifactName: ${productName}-${version}.${ext}
+
+# Linux 설정 (추후 지원)
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  icon: public/favicon.png
+  artifactName: ${productName}-${version}.${ext}
+
+# 빌드 시 패키지 매니저
+npmRebuild: true
+
+# Electron 다운로드 캐시
+electronDownload:
+  cache: .cache/electron
